@@ -3,6 +3,7 @@ shell.nix
 target
 archive
 test_archive
+inventory.json
 
 
 # Added by cargo

@@ -1,4 +1,5 @@
 use crate::consts::TEMP_DIR;
+use anyhow::Result;
 use aws_sdk_glacier::{
     operation::initiate_multipart_upload::InitiateMultipartUploadOutput, Client,
 };
@@ -197,7 +198,11 @@ fn tree_hash(vec_sha: &VecDeque<String>) -> String {
     }
 }
 
-pub async fn do_multipart_upload(client: &Client, file_path: &String, vault_name: &String) {
+pub async fn do_multipart_upload(
+    client: &Client,
+    file_path: &String,
+    vault_name: &String,
+) -> Result<()> {
     match split_file(&file_path) {
         Ok(archive_size) => match send_files(&client, &vault_name, TEMP_DIR).await {
             Ok((glacier_output, hash)) => {
@@ -212,19 +217,23 @@ pub async fn do_multipart_upload(client: &Client, file_path: &String, vault_name
                 {
                     Ok(_output) => {
                         clean_splits().await;
+                        Ok(())
                     }
                     Err(reason) => {
                         eprintln!("{}", reason);
                         clean_splits().await;
+                        Ok(())
                     }
                 }
             }
             Err(reason) => {
                 eprintln!("{}", reason);
+                Ok(())
             }
         },
         Err(reason) => {
             eprintln!("{}", reason);
+            Ok(())
         }
     }
 }
