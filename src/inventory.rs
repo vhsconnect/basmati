@@ -36,7 +36,9 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
                         if describe_output.completed() {
                             println!("describe success jobid : {:?}", describe_output.job_id);
 
-                            if let Ok(mut file) = fs::File::create("inventory.json") {
+                            if let Ok(mut file) =
+                                fs::File::create(format!("./vault/{}/inventory.json", &vault_name))
+                            {
                                 match client
                                     .get_job_output()
                                     .account_id("-")

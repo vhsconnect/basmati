@@ -2,6 +2,7 @@ mod create;
 mod download;
 mod inventory;
 mod multipart_upload;
+mod shared;
 use aws_config::BehaviorVersion as version;
 use clap::{Parser, Subcommand};
 

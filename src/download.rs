@@ -36,22 +36,17 @@ struct Vault<'a> {
     #[serde(rename = "ArchiveList")]
     archive_list: Vec<ArchiveItem<'a>>,
 }
-struct Events<'a> {
-    items: Vec<ArchiveItem<'a>>,
+struct Events<'a, T> {
+    items: Vec<&'a T>,
     state: ListState,
 }
 
-impl<'a> Events<'a> {
-    fn new(items: Vec<ArchiveItem>) -> Events {
+impl<'a, T> Events<'a, T> {
+    fn new(items: Vec<&'a T>) -> Events<'a, T> {
         Events {
             items,
             state: ListState::default(),
         }
-    }
-
-    pub fn set_items(&mut self, items: Vec<ArchiveItem<'a>>) {
-        self.items = items;
-        self.state = ListState::default();
     }
 
     pub fn next(&mut self) {
@@ -81,11 +76,7 @@ impl<'a> Events<'a> {
         self.state.select(Some(i));
     }
 
-    pub fn unselect(&mut self) {
-        self.state.select(None);
-    }
-
-    pub fn choose(&mut self) -> Option<&ArchiveItem<'a>> {
+    pub fn choose(&mut self) -> Option<&'a T> {
         match self.state.selected() {
             Some(i) => Some(&self.items[i]),
             None => None,
@@ -185,7 +176,7 @@ async fn download_archive_by_id(
 }
 
 pub async fn do_download(client: &Client, vault_name: &String) -> Result<(), anyhow::Error> {
-    let mut file_handle = fs::File::open(format!("./vault/{}/inventory.json", vault_name)).expect(
+    let mut file_handle = fs::File::open(format!("./vault/{}/inventory.json", &vault_name)).expect(
         "Failed to read the inventory file - have you pulled down the inventory of the vault yet?",
     );
     let mut json_data = String::new();
@@ -199,9 +190,9 @@ pub async fn do_download(client: &Client, vault_name: &String) -> Result<(), any
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut should_quit = false;
-    let items = inventory.archive_list;
+    let items = inventory.archive_list.iter().map(|x| x).collect::<Vec<_>>();
 
-    let mut events = Events::new(items);
+    let mut events = Events::<ArchiveItem>::new(items);
     while !should_quit {
         terminal.draw(|frame| {
             let area = frame.size();
