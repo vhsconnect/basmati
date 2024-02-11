@@ -30,7 +30,7 @@ impl<'a, T> Events<'a, T> {
     pub fn new(items: Vec<&'a T>) -> Events<'a, T> {
         Events {
             items,
-            state: ListState::default(),
+            state: ListState::default().with_selected(Some(0)),
         }
     }
 
