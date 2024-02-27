@@ -22,7 +22,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
 
     match init {
         Ok(init_ouput) => {
-            println!("initiate success! - {:?}", init_ouput);
+            println!("initiated inventory job successfuly...");
 
             let job = client
                 .describe_job()
@@ -32,9 +32,10 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
 
             loop {
                 match job.clone().send().await {
-                    Ok(describe_output) => {
+                    Ok(mut describe_output) => {
                         if describe_output.completed() {
-                            println!("describe success jobid : {:?}", describe_output.job_id);
+                            println!("job {} completed", describe_output.job_id.as_mut().unwrap());
+                            let output_directory = format!("./vault/{}", &vault_name);
 
                             if let Ok(mut file) =
                                 fs::File::create(format!("./vault/{}/inventory.json", &vault_name))
@@ -48,9 +49,13 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
                                     .await
                                 {
                                     Ok(inventory_output) => {
+                                        println!(
+                                            "Writing inventory to \"{}\"",
+                                            format!("{}/inventory.json", &output_directory)
+                                        );
                                         let bytes = inventory_output.body.collect().await?.to_vec();
-                                        // let mut file = File::create("output.json").await?;
                                         file.write_all(&bytes)?;
+                                        println!("Writing complete!");
                                         break Ok(());
                                     }
 
@@ -59,11 +64,13 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
                                         break Ok(());
                                     }
                                 }
+                            } else {
+                                fs::create_dir_all(&output_directory)
+                                    .expect("Could not write to file nor create directory");
                             }
                         } else {
                             println!(
-                                "job has not completed - going to sleep and will try again {:?}",
-                                describe_output
+                                "job is not ready - going to sleep and will try again in an hour",
                             );
                             thread::sleep(Duration::from_secs(60 * 60))
                         }

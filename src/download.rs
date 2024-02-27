@@ -24,6 +24,7 @@ async fn download_archive_by_id(
     client: &Client,
     vault_name: &String,
     archive_id: &str,
+    output_as: &String,
 ) -> Result<(), anyhow::Error> {
     println!("download_archive_by_id gonna init, {}", archive_id);
 
@@ -42,7 +43,7 @@ async fn download_archive_by_id(
 
     match init {
         Ok(init_ouput) => {
-            println!("initiate job successfuly...");
+            println!("initiated retrieval job successfuly...");
 
             let job = client
                 .describe_job()
@@ -56,7 +57,7 @@ async fn download_archive_by_id(
                         if describe_output.completed() {
                             println!("job {} completed", describe_output.job_id.as_mut().unwrap());
 
-                            if let Ok(mut file) = fs::File::create("archive") {
+                            if let Ok(mut file) = fs::File::create(output_as) {
                                 match client
                                     .get_job_output()
                                     .account_id("-")
@@ -66,7 +67,7 @@ async fn download_archive_by_id(
                                     .await
                                 {
                                     Ok(archive_output) => {
-                                        println!("Writing bytes to a file called \"archive\"");
+                                        println!("Writing bytes to {}", output_as);
                                         let mut stream = archive_output.body;
                                         while let Some(bytes) = stream.try_next().await? {
                                             file.write_all(&bytes).expect("Failed to write bytes");
@@ -103,7 +104,11 @@ async fn download_archive_by_id(
     }
 }
 
-pub async fn do_download(client: &Client, vault_name: &String) -> Result<(), anyhow::Error> {
+pub async fn do_download(
+    client: &Client,
+    vault_name: &String,
+    output_as: &String,
+) -> Result<(), anyhow::Error> {
     let mut file_handle = fs::File::open(format!("./vault/{}/inventory.json", &vault_name)).expect(
         "Failed to read the inventory file - have you pulled down the inventory of the vault yet?",
     );
@@ -118,7 +123,7 @@ pub async fn do_download(client: &Client, vault_name: &String) -> Result<(), any
 
     match crate::shared::select_archive(events) {
         Ok(archive) => {
-            match download_archive_by_id(&client, vault_name, archive.archive_id).await {
+            match download_archive_by_id(&client, vault_name, archive.archive_id, output_as).await {
                 Ok(_success_op) => {
                     println!("Operation completed successfully")
                 }

@@ -27,6 +27,8 @@ enum Commands {
     Download {
         #[arg(long, short)]
         vault_name: String,
+        #[arg(long, short)]
+        output_as: String,
     },
 }
 
@@ -70,8 +72,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 .expect("Operation Failed");
             Ok(())
         }
-        Some(Commands::Download { vault_name }) => {
-            download::do_download(&client, vault_name)
+        Some(Commands::Download {
+            vault_name,
+            output_as,
+        }) => {
+            download::do_download(&client, vault_name, output_as)
                 .await
                 .expect("Operation Failed");
             Ok(())

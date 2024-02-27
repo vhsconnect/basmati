@@ -4,10 +4,3 @@ target
 archive
 test_archive
 inventory.json
-
-
-# Added by cargo
-#
-# already existing elements were commented out
-
-#/target
