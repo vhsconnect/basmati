@@ -17,12 +17,12 @@ enum Commands {
         file_path: String,
         #[arg(long, short)]
         vault_name: String,
+        #[arg(long, short)]
+        description: String,
     },
     Inventory {
         #[arg(long, short)]
         vault_name: String,
-        #[arg(long, short)]
-        desc: String,
     },
     Download {
         #[arg(long, short)]
@@ -30,10 +30,6 @@ enum Commands {
         #[arg(long, short)]
         output_as: String,
     },
-}
-
-pub mod consts {
-    pub const TEMP_DIR: &str = "store";
 }
 
 #[derive(Parser)]
@@ -60,14 +56,15 @@ async fn main() -> Result<(), anyhow::Error> {
         Some(Commands::Upload {
             file_path,
             vault_name,
+            description,
         }) => {
-            multipart_upload::do_multipart_upload(&client, file_path, vault_name)
+            multipart_upload::do_multipart_upload(&client, file_path, vault_name, description)
                 .await
                 .expect("Operation Failed");
             Ok(())
         }
-        Some(Commands::Inventory { vault_name, desc }) => {
-            inventory::do_inventory(&client, vault_name, desc)
+        Some(Commands::Inventory { vault_name }) => {
+            inventory::do_inventory(&client, vault_name)
                 .await
                 .expect("Operation Failed");
             Ok(())

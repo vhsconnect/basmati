@@ -1,3 +1,4 @@
+use crate::shared::basmati_directory;
 use crate::shared::{ArchiveItem, Events};
 use anyhow::Result;
 use aws_sdk_glacier::types::JobParameters;
@@ -109,7 +110,12 @@ pub async fn do_download(
     vault_name: &String,
     output_as: &String,
 ) -> Result<(), anyhow::Error> {
-    let mut file_handle = fs::File::open(format!("./vault/{}/inventory.json", &vault_name)).expect(
+    let mut file_handle = fs::File::open(format!(
+        "{}/vault/{}/inventory.json",
+        basmati_directory(),
+        &vault_name
+    ))
+    .expect(
         "Failed to read the inventory file - have you pulled down the inventory of the vault yet?",
     );
     let mut json_data = String::new();

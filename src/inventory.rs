@@ -5,7 +5,9 @@ use std::io::Write;
 use std::time::Duration;
 use std::{fs, thread};
 
-pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -> Result<()> {
+use crate::shared::basmati_directory;
+
+pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
     let init = client
         .initiate_job()
         .account_id("-")
@@ -13,7 +15,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
         .job_parameters(
             JobParameters::builder()
                 .r#type("inventory-retrieval")
-                .description(desc)
+                .description(vault_name)
                 .format("JSON")
                 .build(),
         )
@@ -35,10 +37,11 @@ pub async fn do_inventory(client: &Client, vault_name: &String, desc: &String) -
                     Ok(mut describe_output) => {
                         if describe_output.completed() {
                             println!("job {} completed", describe_output.job_id.as_mut().unwrap());
-                            let output_directory = format!("./vault/{}", &vault_name);
+                            let output_directory =
+                                format!("{}/vault/{}", basmati_directory(), &vault_name);
 
                             if let Ok(mut file) =
-                                fs::File::create(format!("./vault/{}/inventory.json", &vault_name))
+                                fs::File::create(format!("{}/inventory.json", &output_directory))
                             {
                                 match client
                                     .get_job_output()

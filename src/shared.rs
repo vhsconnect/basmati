@@ -1,8 +1,10 @@
+use colored::Colorize;
 use crossterm::ExecutableCommand;
 use crossterm::{
     event::{self, Event, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use home::home_dir;
 use ratatui::{prelude::*, widgets::*};
 use serde::Deserialize;
 use std::io::stdout;
@@ -65,6 +67,34 @@ impl<'a, T> Events<'a, T> {
         match self.state.selected() {
             Some(i) => Some(&self.items[i]),
             None => None,
+        }
+    }
+}
+
+pub fn basmati_directory() -> String {
+    match home_dir() {
+        Some(path) => format!("{}/.basmati", path.display()),
+        None => panic!("Can not find home directory"),
+    }
+}
+
+pub async fn create_if_not_exists(path: &str) {
+    match std::fs::create_dir_all(&path) {
+        Ok(_) => println!("Created the following directory successfully - {}", &path),
+        Err(_) => clean_splits(path).await,
+    }
+}
+
+pub async fn clean_splits(temp_dir: &str) {
+    match std::fs::read_dir(temp_dir) {
+        Ok(dir) => {
+            for entry in dir {
+                std::fs::remove_file(entry.unwrap().path()).unwrap();
+            }
+            println!("{}", Colorize::yellow("Temporary files deleted"))
+        }
+        Err(reason) => {
+            eprintln!("{:?}", reason)
         }
     }
 }

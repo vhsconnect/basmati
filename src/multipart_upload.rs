@@ -1,64 +1,99 @@
-use crate::consts::TEMP_DIR;
+use crate::shared::{basmati_directory, clean_splits, create_if_not_exists};
 use anyhow::Result;
 use aws_sdk_glacier::{
     operation::initiate_multipart_upload::InitiateMultipartUploadOutput, Client,
 };
 use aws_smithy_types::byte_stream::ByteStream;
 use colored::Colorize;
+use regex::Regex;
 use sha256::digest;
 use std::collections::VecDeque;
+use std::ffi::OsStr;
 use std::fs::{self, DirEntry, File};
 use std::io::Error as IOError;
 use std::io::{Read, Write};
 const CHUNK_SIZE: usize = 1048576;
 
-fn two_digit_index(x: usize) -> String {
-    if x < 10 {
-        format!("0{}", x)
-    } else {
-        x.to_string()
-    }
+struct InfiniteIndeces {
+    value: usize,
 }
 
-fn split_file(input_filename: &str) -> Result<u64, IOError> {
+impl InfiniteIndeces {
+    fn new() -> Self {
+        InfiniteIndeces { value: 0 }
+    }
+    fn next(&mut self) -> usize {
+        self.value = self.value + 1;
+        self.value
+    }
+}
+#[test]
+fn test_infinite_indeces() {
+    let mut i = InfiniteIndeces::new();
+    assert_eq!(i.next(), 1);
+    assert_eq!(i.next(), 2);
+    assert_eq!(i.next(), 3);
+    assert_eq!(i.next(), 4);
+    assert_eq!(i.next(), 5);
+    assert_eq!(i.next(), 6);
+    assert_eq!(i.next(), 7);
+    assert_eq!(i.next(), 8);
+    assert_eq!(i.next(), 9);
+    assert_eq!(i.next(), 10);
+    assert_eq!(i.next(), 11);
+}
+
+fn split_file(input_filename: &str) -> Result<(u64, String), IOError> {
+    let temp_dir = format!("{}/TMP/{}", basmati_directory(), digest(input_filename));
+    println!("creating directory");
+    create_if_not_exists(&temp_dir);
+    println!("created/cleaned up directory");
+
     let mut file = File::open(input_filename)?;
+    println!("opened file");
     let mut buffer = [0; CHUNK_SIZE];
-    let mut index = 0;
+    let mut i = InfiniteIndeces::new();
 
     loop {
+        let ind = i.next();
+        println!("looping {}", ind);
         let bytes_read = file.read(&mut buffer)?;
         if bytes_read == 0 {
+            println!("breaking!");
             break;
         }
 
-        let output_filename = format!("{}/part_{}.bin", TEMP_DIR, two_digit_index(index));
+        let output_filename = format!("{}/part_{}.bin", temp_dir, ind);
         let mut output_file = File::create(output_filename)?;
 
         output_file.write_all(&buffer[..bytes_read])?;
-        index += 1;
     }
 
-    Ok(file.metadata().unwrap().len())
+    Ok((file.metadata().unwrap().len(), temp_dir))
 }
 
-async fn clean_splits() {
-    match fs::read_dir(TEMP_DIR) {
-        Ok(dir) => {
-            for entry in dir {
-                fs::remove_file(entry.unwrap().path()).unwrap();
-            }
-        }
-        Err(reason) => {
-            eprintln!("{:?}", reason)
-        }
+fn get_index_from_filename(x: &OsStr) -> i32 {
+    let re = Regex::new(r"\d+").unwrap();
+    if let Some(value) = re.find(x.to_str().unwrap()) {
+        let v: i32 = value.as_str().parse().unwrap();
+        return v;
     }
-    println!("{}", Colorize::green("Cleaning up"))
+    panic!("Unexepected File name")
+}
+
+#[test]
+fn test_get_index_from_filename_valid() {
+    let filename = OsStr::new("file_10.txt");
+    let expected_index = 10;
+    let actual_index = get_index_from_filename(filename);
+    assert_eq!(expected_index, actual_index);
 }
 
 async fn send_files(
     client: &Client,
     vault_name: &String,
     output_dir: &str,
+    description: &String,
 ) -> Result<(InitiateMultipartUploadOutput, String), aws_sdk_glacier::Error> {
     let mut sha256_vec = VecDeque::new();
 
@@ -66,7 +101,7 @@ async fn send_files(
         .initiate_multipart_upload()
         .account_id("-")
         .vault_name(vault_name)
-        .archive_description("todo")
+        .archive_description(description)
         .part_size(CHUNK_SIZE.to_string())
         .send()
         .await?;
@@ -74,7 +109,10 @@ async fn send_files(
     match fs::read_dir(output_dir) {
         Ok(entries) => {
             let mut sorted: Vec<DirEntry> = entries.filter_map(Result::ok).collect();
-            sorted.sort_by(|a, b| a.path().file_name().cmp(&b.path().file_name()));
+            sorted.sort_by(|a, b| {
+                get_index_from_filename(a.path().file_name().unwrap())
+                    .cmp(&get_index_from_filename(b.path().file_name().unwrap()))
+            });
             for (index, entry) in sorted.into_iter().enumerate() {
                 let path = entry.path();
                 let buffer = fs::read(&path).unwrap();
@@ -179,7 +217,8 @@ fn tree_hash(vec_sha: &VecDeque<String>) -> String {
                     let bytes = hex::decode(concat_hex).unwrap();
 
                     break digest(bytes);
-                } else if next.len() == 0 {
+                }
+                if next.len() == 0 {
                     let result = pairs.clone();
                     break result[0].to_string();
                 }
@@ -202,35 +241,41 @@ pub async fn do_multipart_upload(
     client: &Client,
     file_path: &String,
     vault_name: &String,
+    description: &String,
 ) -> Result<()> {
     match split_file(&file_path) {
-        Ok(archive_size) => match send_files(&client, &vault_name, TEMP_DIR).await {
-            Ok((glacier_output, hash)) => {
-                match complete_multipart_upload(
-                    &glacier_output,
-                    &vault_name,
-                    &archive_size,
-                    hash,
-                    &client,
-                )
-                .await
-                {
-                    Ok(_output) => {
-                        clean_splits().await;
-                        Ok(())
-                    }
-                    Err(reason) => {
-                        eprintln!("{}", reason);
-                        clean_splits().await;
-                        Ok(())
+        Ok((archive_size, temp_dir)) => {
+            println!("gonna send files");
+            match send_files(&client, &vault_name, temp_dir.as_str(), description).await {
+                Ok((glacier_output, hash)) => {
+                    match complete_multipart_upload(
+                        &glacier_output,
+                        &vault_name,
+                        &archive_size,
+                        hash,
+                        &client,
+                    )
+                    .await
+                    {
+                        Ok(_output) => {
+                            println!("{}", "upload confirmed".green());
+                            clean_splits(&temp_dir).await;
+
+                            Ok(())
+                        }
+                        Err(reason) => {
+                            eprintln!("{}", reason);
+                            clean_splits(&temp_dir).await;
+                            Ok(())
+                        }
                     }
                 }
+                Err(reason) => {
+                    eprintln!("{}", reason);
+                    Ok(())
+                }
             }
-            Err(reason) => {
-                eprintln!("{}", reason);
-                Ok(())
-            }
-        },
+        }
         Err(reason) => {
             eprintln!("{}", reason);
             Ok(())
