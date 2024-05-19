@@ -8,28 +8,40 @@ use home::home_dir;
 use ratatui::{prelude::*, widgets::*};
 use serde::Deserialize;
 use std::io::stdout;
+use std::io::Read;
 
-#[derive(Debug, Deserialize)]
-pub struct ArchiveItem<'a> {
+#[derive(Debug, Deserialize, Clone)]
+pub struct ArchiveItem {
     #[serde(rename = "ArchiveId")]
-    pub archive_id: &'a str,
+    pub archive_id: String,
     #[serde(rename = "ArchiveDescription")]
-    archive_description: &'a str,
+    archive_description: String,
     #[serde(rename = "CreationDate")]
-    creation_date: &'a str,
+    creation_date: String,
     #[serde(rename = "Size")]
     size: i64,
     #[serde(rename = "SHA256TreeHash")]
-    sha256_tree_hash: &'a str,
+    sha256_tree_hash: String,
 }
 
-pub struct Events<'a, T> {
-    items: Vec<&'a T>,
+#[derive(Debug, Deserialize)]
+struct Vault<'a> {
+    #[serde(rename = "VaultARN")]
+    vault_arn: &'a str,
+    #[serde(rename = "InventoryDate")]
+    inventory_date: &'a str,
+    #[serde(rename = "ArchiveList")]
+    archive_list: Vec<ArchiveItem>,
+}
+
+#[derive(Clone)]
+pub struct Events<T: Clone> {
+    items: Vec<T>,
     state: ListState,
 }
 
-impl<'a, T> Events<'a, T> {
-    pub fn new(items: Vec<&'a T>) -> Events<'a, T> {
+impl<T: std::clone::Clone> Events<T> {
+    pub fn new(items: Vec<T>) -> Events<T> {
         Events {
             items,
             state: ListState::default().with_selected(Some(0)),
@@ -63,9 +75,9 @@ impl<'a, T> Events<'a, T> {
         self.state.select(Some(i));
     }
 
-    pub fn choose(&mut self) -> Option<&'a T> {
+    pub fn choose(&mut self) -> Option<T> {
         match self.state.selected() {
-            Some(i) => Some(&self.items[i]),
+            Some(i) => Some(self.items[i].clone()),
             None => None,
         }
     }
@@ -107,9 +119,28 @@ fn ui(frame: &mut Frame) {
     );
 }
 
-pub fn select_archive<'a>(
-    mut events: Events<'a, ArchiveItem>,
-) -> Result<&'a ArchiveItem<'a>, anyhow::Error> {
+pub async fn get_archive_from_tui(vault_name: &String) -> Result<ArchiveItem, anyhow::Error> {
+    let mut file_handle = std::fs::File::open(format!(
+        "{}/vault/{}/inventory.json",
+        basmati_directory(),
+        &vault_name
+    ))
+    .expect(
+        "Failed to read the inventory file - have you pulled down the inventory of the vault yet?",
+    );
+    let mut json_data = String::new();
+    file_handle
+        .read_to_string(&mut json_data)
+        .expect("IO error reading the file");
+
+    let inventory: Vault = serde_json::from_str(&json_data).expect("error parsing JSON");
+    let items = inventory.archive_list.into_iter().collect::<Vec<_>>();
+    let events = Events::<ArchiveItem>::new(items);
+
+    crate::shared::select_archive(events)
+}
+
+pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, anyhow::Error> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
@@ -118,7 +149,11 @@ pub fn select_archive<'a>(
     while !should_quit {
         terminal.draw(|frame| {
             let area = frame.size();
-            let list_items = events.items.iter().map(|x| x.archive_description);
+            let list_items: Vec<&str> = events
+                .items
+                .iter()
+                .map(|x| x.archive_description.as_str())
+                .collect();
 
             let block = Block::default()
                 .title("Archives")
@@ -145,6 +180,9 @@ pub fn select_archive<'a>(
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
                     events.previous();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
+                    should_quit = true;
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Enter {
                     match events.choose() {
