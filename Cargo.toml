@@ -3,6 +3,14 @@
 name = "basmati"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+authors = ["vhsconnect"]
+readme = "README.md"
+repository = "https://github.com/vhsconnect/basmati"
+homepage = "https://github.com/vhsconnect/basmati"
+categories = ["command-line-utilities"]
+keywords = ["aws", "glacier", "cli", "storage", "CRUD"]
+description = "Command line utility for interacting with AWS Glacier"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,8 +18,6 @@ edition = "2021"
 anyhow = "1.0.79"
 aws-config = "1.1.1"
 aws-sdk-glacier = "1.9.0"
-aws-smithy-client = "0.60.2"
-aws-smithy-http = "0.60.2"
 aws-smithy-types = "1.1.1"
 bytes = "1.5.0"
 chrono = "0.4.31"
@@ -26,3 +32,7 @@ serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 sha256 = "1.5.0"
 tokio = { version = "1.35.1", features = ["full"] }
+
+[[bin]]
+name = "basmati"
+path = "src/main.rs"

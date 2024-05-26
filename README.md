@@ -77,6 +77,25 @@ Options:
   -h, --help                     Print help
 ```
 
-### TODO
+#### delete-archive
 
-- confirm one delete
+Delete an archive from a vault
+
+```
+Usage: basmati delete-archive --vault-name <VAULT_NAME>
+
+Options:
+  -v, --vault-name <VAULT_NAME>
+  -h, --help                     Print help
+```
+
+#### list-vaults
+
+List all vaults for current account
+
+```
+Usage: basmati list-vaults
+
+Options:
+  -h, --help  Print help
+```

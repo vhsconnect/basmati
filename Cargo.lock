@@ -340,12 +340,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-smithy-client"
-version = "0.60.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "293873812e8a324d28d04a32038bddec01c6932c9984e51606fe776ef30d642c"
-
-[[package]]
 name = "aws-smithy-http"
 version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,8 +504,6 @@ dependencies = [
  "anyhow",
  "aws-config",
  "aws-sdk-glacier",
- "aws-smithy-client",
- "aws-smithy-http",
  "aws-smithy-types",
  "bytes",
  "chrono",
