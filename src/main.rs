@@ -1,6 +1,8 @@
 mod create;
+mod delete_archive;
 mod download;
 mod inventory;
+mod list_vaults;
 mod multipart_upload;
 mod shared;
 use aws_config::BehaviorVersion as version;
@@ -30,6 +32,11 @@ enum Commands {
         #[arg(long, short)]
         output_as: String,
     },
+    DeleteArchive {
+        #[arg(long, short)]
+        vault_name: String,
+    },
+    ListVaults {},
 }
 
 #[derive(Parser)]
@@ -74,6 +81,18 @@ async fn main() -> Result<(), anyhow::Error> {
             output_as,
         }) => {
             download::do_download(&client, vault_name, output_as)
+                .await
+                .expect("Operation Failed");
+            Ok(())
+        }
+        Some(Commands::DeleteArchive { vault_name }) => {
+            delete_archive::do_deletion(&client, vault_name)
+                .await
+                .expect("Operation Failed");
+            Ok(())
+        }
+        Some(Commands::ListVaults {}) => {
+            list_vaults::do_listing(&client)
                 .await
                 .expect("Operation Failed");
             Ok(())

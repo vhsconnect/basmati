@@ -1,10 +1,10 @@
-Basmati is a cli command like utility to stream archives up and down from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to dowload your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfuly upload archives.
+Basmati is a cli command like utility to stream archives up and down, to and from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to dowload your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfuly upload archives.
 
-Basmati is a rewrite (with many more features) of a Node.js application [glacier-wk](https://github.com/vhsconnect/glacier-wk). Basmati is working software that I use everyday. It is also intended as a learning project for me to write Rust. Feel free to open PRs, issues and nitpick the code. I intend to publish it to Cargo and add more options to the various commands.
+Basmati is a rewrite (with many more features) of a Node.js application [glacier-wk](https://github.com/vhsconnect/glacier-wk). Basmati is working software that I use everyday. It is also intended as a learning project for me to write Rust. Feel free to open PRs, issues and nitpick the code.
 
 ### Environment and setup
 
-The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in your path already. Currently you have to build the executble yourself and use the debug version. `cargo build` then `./target/debug/basmati [OPTIONS] [COMMAND]`
+The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in your environment already. Currently you have to build the executble yourself and use the debug version. `cargo build` then `./target/debug/basmati [OPTIONS] [COMMAND]`
 
 ### USAGE
 
@@ -76,3 +76,7 @@ Options:
   -d, --desc <DESC>
   -h, --help                     Print help
 ```
+
+### TODO
+
+- confirm one delete

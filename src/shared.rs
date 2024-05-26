@@ -15,9 +15,9 @@ pub struct ArchiveItem {
     #[serde(rename = "ArchiveId")]
     pub archive_id: String,
     #[serde(rename = "ArchiveDescription")]
-    archive_description: String,
+    pub archive_description: String,
     #[serde(rename = "CreationDate")]
-    creation_date: String,
+    pub creation_date: String,
     #[serde(rename = "Size")]
     size: i64,
     #[serde(rename = "SHA256TreeHash")]
@@ -140,6 +140,77 @@ pub async fn get_archive_from_tui(vault_name: &String) -> Result<ArchiveItem, an
     crate::shared::select_archive(events)
 }
 
+pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
+    enable_raw_mode()?;
+    stdout().execute(EnterAlternateScreen)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+    let mut should_quit = false;
+    let mut return_value = None;
+    let confrim_options = vec![String::from("yes"), String::from("no")];
+    let mut events = Events::new(confrim_options);
+    while !should_quit {
+        let list_items = events.items.clone();
+        let text = text.clone();
+        terminal.draw(|frame| {
+            let area = frame.size();
+            let block = Block::default().title(text).green().borders(Borders::ALL);
+
+            let list = List::new(list_items)
+                .bold()
+                .red()
+                .block(block)
+                .highlight_style(Style::new().italic())
+                .highlight_symbol("->")
+                .repeat_highlight_symbol(true);
+
+            frame.render_stateful_widget(list, area, &mut events.state)
+        })?;
+        if event::poll(std::time::Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                    should_quit = true;
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('j') {
+                    events.next();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
+                    events.previous();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
+                    should_quit = true;
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Enter {
+                    match events.choose() {
+                        Some(value) => {
+                            should_quit = true;
+                            disable_raw_mode()?;
+                            stdout().execute(LeaveAlternateScreen)?;
+                            disable_raw_mode()?;
+                            stdout()
+                                .execute(LeaveAlternateScreen)
+                                .expect("failed releasing terminal");
+                            match value.as_str() {
+                                "yes" => {
+                                    return_value = Some(true);
+                                }
+                                "no" => {
+                                    return_value = Some(false);
+                                }
+                                _ => panic!("unexpected selection"),
+                            }
+                        }
+                        None => {
+                            should_quit = true;
+                            println!("could not match user input")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(return_value.unwrap())
+}
+
 pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, anyhow::Error> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
@@ -162,7 +233,7 @@ pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, an
 
             let list = List::new(list_items)
                 .bold()
-                .red()
+                .green()
                 .block(block)
                 .highlight_style(Style::new().italic())
                 .highlight_symbol("->")
