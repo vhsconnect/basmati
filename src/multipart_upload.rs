@@ -10,7 +10,6 @@ use sha256::digest;
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry, File};
-use std::io::Error as IOError;
 use std::io::{Read, Write};
 const CHUNK_SIZE: usize = 1048576;
 
@@ -43,10 +42,10 @@ fn test_infinite_indeces() {
     assert_eq!(i.next(), 11);
 }
 
-fn split_file(input_filename: &str) -> Result<(u64, String), IOError> {
+async fn split_file(input_filename: &str) -> Result<(u64, String), anyhow::Error> {
     let temp_dir = format!("{}/TMP/{}", basmati_directory(), digest(input_filename));
     println!("creating directory");
-    create_if_not_exists(&temp_dir);
+    create_if_not_exists(&temp_dir).await;
     println!("created/cleaned up directory");
 
     let mut file = File::open(input_filename)?;
@@ -243,7 +242,7 @@ pub async fn do_multipart_upload(
     vault_name: &String,
     description: &String,
 ) -> Result<()> {
-    match split_file(&file_path) {
+    match split_file(&file_path).await {
         Ok((archive_size, temp_dir)) => {
             println!("gonna send files");
             match send_files(&client, &vault_name, temp_dir.as_str(), description).await {

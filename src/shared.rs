@@ -19,16 +19,20 @@ pub struct ArchiveItem {
     #[serde(rename = "CreationDate")]
     pub creation_date: String,
     #[serde(rename = "Size")]
+    #[allow(dead_code)]
     size: i64,
     #[serde(rename = "SHA256TreeHash")]
+    #[allow(dead_code)]
     sha256_tree_hash: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct Vault<'a> {
     #[serde(rename = "VaultARN")]
+    #[allow(dead_code)]
     vault_arn: &'a str,
     #[serde(rename = "InventoryDate")]
+    #[allow(dead_code)]
     inventory_date: &'a str,
     #[serde(rename = "ArchiveList")]
     archive_list: Vec<ArchiveItem>,
@@ -109,14 +113,6 @@ pub async fn clean_splits(temp_dir: &str) {
             eprintln!("{:?}", reason)
         }
     }
-}
-
-fn ui(frame: &mut Frame) {
-    frame.render_widget(
-        Paragraph::new("Hello World!")
-            .block(Block::default().title("Greeting").borders(Borders::ALL)),
-        frame.size(),
-    );
 }
 
 pub async fn get_archive_from_tui(vault_name: &String) -> Result<ArchiveItem, anyhow::Error> {
