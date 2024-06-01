@@ -25,7 +25,7 @@ pub async fn do_listing(client: &Client) -> Result<(), anyhow::Error> {
             };
         }
         Err(reason) => {
-            println!("archive deletion failed! - {}", reason);
+            println!("Listing of vaults failed! - {}", reason);
         }
     };
 

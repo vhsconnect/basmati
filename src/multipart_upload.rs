@@ -11,7 +11,9 @@ use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry, File};
 use std::io::{Read, Write};
-const CHUNK_SIZE: usize = 1048576;
+use std::os::unix::fs::MetadataExt;
+const ONE_MB: usize = 1048576;
+const MAX_PART_AMOUNT: u64 = 10000;
 
 struct InfiniteIndeces {
     value: usize,
@@ -42,33 +44,84 @@ fn test_infinite_indeces() {
     assert_eq!(i.next(), 11);
 }
 
-async fn split_file(input_filename: &str) -> Result<(u64, String), anyhow::Error> {
+fn calculate_optimal_interval(file: &File) -> Result<u64, anyhow::Error> {
+    let sizes = [
+        1048576 * 16,
+        1048576 * 32,
+        1048576 * 64,
+        1048576 * 128,
+        1048576 * 256,
+        1048576 * 562,
+        1048576 * 1024,
+        1048576 * 2048,
+        1048576,
+        1048576 * 2,
+        1048576 * 4,
+        1048576 * 8,
+    ];
+
+    let file_size = file.metadata().unwrap().size();
+    let mut i = sizes.into_iter();
+
+    while let Some(x) = i.next() {
+        if file_size > x && file_size / x < MAX_PART_AMOUNT {
+            println!("Splitting the archive in chunks of {} bytes", x);
+            return Ok(x);
+        }
+    }
+    Err(anyhow::anyhow!(
+        "Ensure that archive is between 1 MB and 40,000 GB"
+    ))
+}
+
+async fn split_file(
+    input_filename: &str,
+) -> Result<(u64, String, Vec<String>, u64), anyhow::Error> {
     let temp_dir = format!("{}/TMP/{}", basmati_directory(), digest(input_filename));
-    println!("creating directory");
+    println!("creating temporary directory");
     create_if_not_exists(&temp_dir).await;
-    println!("created/cleaned up directory");
 
     let mut file = File::open(input_filename)?;
-    println!("opened file");
-    let mut buffer = [0; CHUNK_SIZE];
+    let chunk_size = calculate_optimal_interval(&file)?;
+    println!(
+        "Spliting a {} bytes archive into {:} parts",
+        (file.metadata().unwrap().size()),
+        file.metadata().unwrap().size() / chunk_size + 1
+    );
+    let mut buffer = vec![0; chunk_size.try_into()?];
     let mut i = InfiniteIndeces::new();
+    let mut sha256_vec = Vec::new();
 
     loop {
         let ind = i.next();
-        println!("looping {}", ind);
         let bytes_read = file.read(&mut buffer)?;
+
+        let chunks: Vec<String> = buffer
+            // last itteration has zeroed data at end of buffer
+            [0..buffer.iter().rposition(|&x| x != 0).map_or(0, |x| x + 1)]
+            .chunks(ONE_MB)
+            .to_owned()
+            .map(|x| digest(x))
+            .collect();
+
         if bytes_read == 0 {
-            println!("breaking!");
             break;
         }
 
-        let output_filename = format!("{}/part_{}.bin", temp_dir, ind);
-        let mut output_file = File::create(output_filename)?;
+        sha256_vec = [&sha256_vec[..], &chunks[..]].concat();
+
+        let mut output_file = File::create(format!("{}/part_{}.bin", temp_dir, ind))?;
 
         output_file.write_all(&buffer[..bytes_read])?;
+        buffer.fill(0);
     }
 
-    Ok((file.metadata().unwrap().len(), temp_dir))
+    Ok((
+        file.metadata().unwrap().len(),
+        temp_dir,
+        sha256_vec,
+        chunk_size,
+    ))
 }
 
 fn get_index_from_filename(x: &OsStr) -> i32 {
@@ -93,15 +146,14 @@ async fn send_files(
     vault_name: &String,
     output_dir: &str,
     description: &String,
-) -> Result<(InitiateMultipartUploadOutput, String), aws_sdk_glacier::Error> {
-    let mut sha256_vec = VecDeque::new();
-
+    chunk_size: u64,
+) -> Result<InitiateMultipartUploadOutput, aws_sdk_glacier::Error> {
     let output = client
         .initiate_multipart_upload()
         .account_id("-")
         .vault_name(vault_name)
         .archive_description(description)
-        .part_size(CHUNK_SIZE.to_string())
+        .part_size(chunk_size.to_string())
         .send()
         .await?;
 
@@ -114,22 +166,17 @@ async fn send_files(
             });
             for (index, entry) in sorted.into_iter().enumerate() {
                 let path = entry.path();
-                let buffer = fs::read(&path).unwrap();
                 let size = entry.metadata().unwrap().len();
                 let stream = ByteStream::from_path(&path).await;
-                let hash = digest(buffer);
-                let hash_clone = hash.clone();
-                sha256_vec.push_back(hash);
 
                 match client
                     .upload_multipart_part()
                     .account_id("-")
                     .range(format!(
                         "bytes {}-{}/*",
-                        index * CHUNK_SIZE,
-                        (index as u64 * CHUNK_SIZE as u64) + size - 1
+                        index as u64 * chunk_size,
+                        (index as u64 * chunk_size as u64) + size - 1
                     ))
-                    .checksum(hash_clone)
                     .upload_id(output.upload_id().unwrap())
                     .vault_name(vault_name)
                     .body(stream.unwrap())
@@ -146,7 +193,7 @@ async fn send_files(
                     Err(reason) => eprintln!("{}", reason),
                 }
             }
-            Ok((output, tree_hash(&sha256_vec)))
+            Ok(output)
         }
         Err(reason) => panic!("Unable to read files in specified directory - {}", reason),
     }
@@ -243,15 +290,23 @@ pub async fn do_multipart_upload(
     description: &String,
 ) -> Result<()> {
     match split_file(&file_path).await {
-        Ok((archive_size, temp_dir)) => {
-            println!("gonna send files");
-            match send_files(&client, &vault_name, temp_dir.as_str(), description).await {
-                Ok((glacier_output, hash)) => {
+        Ok((archive_size, temp_dir, sha256_vec, chunk_size)) => {
+            println!("Starting data upload");
+            match send_files(
+                &client,
+                &vault_name,
+                temp_dir.as_str(),
+                description,
+                chunk_size,
+            )
+            .await
+            {
+                Ok(glacier_output) => {
                     match complete_multipart_upload(
                         &glacier_output,
                         &vault_name,
                         &archive_size,
-                        hash,
+                        tree_hash(&VecDeque::from(sha256_vec)),
                         &client,
                     )
                     .await
