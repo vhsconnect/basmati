@@ -4,7 +4,39 @@ Basmati is a rewrite (with many more features) of a Node.js application [glacier
 
 ### Environment and setup
 
-The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in your environment already. Currently you have to build the executble yourself and use the debug version. `cargo build` then `./target/debug/basmati [OPTIONS] [COMMAND]`
+The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in your environment already. There is currently no way to pass those in as command line arguments.
+
+### Packaging
+
+Basmati is currently available as a crate or as Nix flake
+
+```
+# crate
+cargo install basmati
+```
+
+```nix
+# get the flake
+{
+  inputs = {
+    ...
+    basmati.url = "github:vhsconnect/basmati";
+
+};
+
+```
+
+```nix
+# add to your packages attribute set
+{pkgs, inputs, ...} :{
+    environment.systemPackages = [
+        inputs.basmati.packages.${pkgs.system}.default
+    ]
+
+};
+
+
+```
 
 ### USAGE
 
