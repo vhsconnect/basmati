@@ -44,7 +44,7 @@ fn test_infinite_indeces() {
     assert_eq!(i.next(), 11);
 }
 
-fn calculate_optimal_interval(file: &File) -> Result<u64, anyhow::Error> {
+fn get_part_size(file: &File) -> Result<u64, anyhow::Error> {
     let sizes = [
         1048576 * 16,
         1048576 * 32,
@@ -82,7 +82,7 @@ async fn split_file(
     create_if_not_exists(&temp_dir).await;
 
     let mut file = File::open(input_filename)?;
-    let chunk_size = calculate_optimal_interval(&file)?;
+    let chunk_size = get_part_size(&file)?;
     println!(
         "Spliting a {} bytes archive into {:} parts",
         (file.metadata().unwrap().size()),
@@ -96,24 +96,20 @@ async fn split_file(
         let ind = i.next();
         let bytes_read = file.read(&mut buffer)?;
 
-        let chunks: Vec<String> = buffer
-            // last itteration has zeroed data at end of buffer
-            [0..buffer.iter().rposition(|&x| x != 0).map_or(0, |x| x + 1)]
+        let chunks: Vec<String> = buffer[0..bytes_read]
             .chunks(ONE_MB)
             .to_owned()
             .map(|x| digest(x))
             .collect();
 
         if bytes_read == 0 {
+            println!("computing treehash from {} checksums", sha256_vec.len());
             break;
         }
 
         sha256_vec = [&sha256_vec[..], &chunks[..]].concat();
-
         let mut output_file = File::create(format!("{}/part_{}.bin", temp_dir, ind))?;
-
         output_file.write_all(&buffer[..bytes_read])?;
-        buffer.fill(0);
     }
 
     Ok((
