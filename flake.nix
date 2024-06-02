@@ -36,7 +36,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       _builder = pkgs.callPackage inputs.naersk { };
       pname = "basmati";
-      version = "0.2.0";
+      version = "0.3.0";
       src = ./.;
       doCheck = true;
 
