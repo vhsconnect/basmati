@@ -1,34 +1,35 @@
 use crate::shared::get_archive_from_tui;
 use aws_sdk_glacier::Client;
-use colored::*;
 
 pub async fn do_deletion(client: &Client, vault_name: &String) -> Result<(), anyhow::Error> {
-    let archive = get_archive_from_tui(vault_name).await?;
-    match crate::shared::confirm(format!(
-        "delete archive: {} created on {}",
-        archive.archive_description, archive.creation_date,
-    )) {
+    let archives = get_archive_from_tui(vault_name).await?;
+    match crate::shared::confirm(
+        archives
+            .iter()
+            .map(|x| format!(" {} created on {}", x.archive_description, x.creation_date,))
+            .fold(
+                String::from("Do you want to delete the following archives?"),
+                |x, y| x + &y + ";",
+            ),
+    ) {
         Ok(true) => {
-            let job = client
-                .delete_archive()
-                .account_id("-")
-                .vault_name(vault_name)
-                .archive_id(&archive.archive_id)
-                .send()
-                .await;
-
-            match job {
-                Ok(_) => {
-                    println!(
-                        "The following archive has been deleted: {}",
-                        &archive.archive_id.yellow()
-                    );
+            let mut jobs = archives.iter().map(|archive| {
+                client
+                    .delete_archive()
+                    .account_id("-")
+                    .vault_name(vault_name)
+                    .archive_id(&archive.archive_id)
+            });
+            while let Some(next_job) = jobs.next() {
+                match next_job.send().await {
+                    Ok(_) => println!("Successfully deleted"),
+                    Err(reason) => {
+                        println!("archive deletion failed! - {}", reason);
+                    }
                 }
-                Err(reason) => {
-                    println!("archive deletion failed! - {}", reason);
-                }
-            };
+            }
         }
+
         Ok(false) => {
             println!("exiting");
         }

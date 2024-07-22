@@ -1,5 +1,5 @@
 use crate::shared::get_archive_from_tui;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;
 use std::io::Write;
@@ -61,7 +61,6 @@ async fn download_archive_by_id(
                                             file.write_all(&bytes).expect("Failed to write bytes");
                                         }
                                         println!("Writing complete!");
-
                                         break Ok(());
                                     }
 
@@ -98,8 +97,16 @@ pub async fn do_download(
     output_as: &String,
 ) -> Result<(), anyhow::Error> {
     match get_archive_from_tui(vault_name).await {
-        Ok(archive) => {
-            match download_archive_by_id(&client, vault_name, archive.archive_id, output_as).await {
+        Ok(archives) => {
+            if archives.len() > 1 {
+                return Err(anyhow!(
+                    "You must select a single archive and no more than one archive to download"
+                ));
+            }
+            let archive = archives.first().unwrap();
+            match download_archive_by_id(&client, vault_name, archive.archive_id.clone(), output_as)
+                .await
+            {
                 Ok(_success_op) => {
                     println!("Operation completed successfully")
                 }
