@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use colored::Colorize;
+use crossterm::terminal::size;
 use crossterm::ExecutableCommand;
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -137,7 +138,7 @@ pub async fn get_archive_from_tui(vault_name: &String) -> Result<Vec<ArchiveItem
     select_multiple_archives(events)
 }
 
-pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
+pub fn confirm(title: String, confirmation_items: Vec<String>) -> Result<bool, anyhow::Error> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
@@ -145,12 +146,31 @@ pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
     let mut return_value = None;
     let confrim_options = vec![String::from("yes"), String::from("no")];
     let mut events = Events::new(confrim_options);
+    let terminal_width = size()?.0;
+    let terminal_height = size()?.1;
+    let midpoint = terminal_width / 2;
     while !should_quit {
         let list_items = events.items.clone();
-        let text = text.clone();
         terminal.draw(|frame| {
-            let area = frame.size();
-            let block = Block::default().title(text).green().borders(Borders::ALL);
+            let areas = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(midpoint), Constraint::Length(midpoint)])
+                .split(Rect::new(0, 0, terminal_width, terminal_height));
+            let block = Block::default()
+                .title(title.clone())
+                .green()
+                .borders(Borders::ALL);
+            let text: Vec<Line> = confirmation_items
+                .clone()
+                .into_iter()
+                .map(|x| {
+                    Line::from(Span::styled(
+                        String::from(x),
+                        Style::default().fg(Color::Red),
+                    ))
+                })
+                .collect();
+            let display_text = Paragraph::new(text).block(Block::default());
 
             let list = List::new(list_items)
                 .bold()
@@ -160,7 +180,8 @@ pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
                 .highlight_symbol("->")
                 .repeat_highlight_symbol(true);
 
-            frame.render_stateful_widget(list, area, &mut events.state)
+            frame.render_widget(display_text, areas[0]);
+            frame.render_stateful_widget(list, areas[1], &mut events.state);
         })?;
         if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
@@ -171,6 +192,12 @@ pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
                     events.next();
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
+                    events.previous();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Down {
+                    events.next();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Up {
                     events.previous();
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
@@ -242,6 +269,12 @@ pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, an
                     events.next();
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
+                    events.previous();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Down {
+                    events.next();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Up {
                     events.previous();
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
@@ -325,6 +358,12 @@ pub fn select_multiple_archives(
                     events.next();
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
+                    events.previous();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Down {
+                    events.next();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Up {
                     events.previous();
                 }
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
