@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use colored::Colorize;
 use crossterm::ExecutableCommand;
 use crossterm::{
@@ -115,7 +116,7 @@ pub async fn clean_splits(temp_dir: &str) {
     }
 }
 
-pub async fn get_archive_from_tui(vault_name: &String) -> Result<ArchiveItem, anyhow::Error> {
+pub async fn get_archive_from_tui(vault_name: &String) -> Result<Vec<ArchiveItem>, anyhow::Error> {
     let mut file_handle = std::fs::File::open(format!(
         "{}/vault/{}/inventory.json",
         basmati_directory(),
@@ -133,7 +134,7 @@ pub async fn get_archive_from_tui(vault_name: &String) -> Result<ArchiveItem, an
     let items = inventory.archive_list.into_iter().collect::<Vec<_>>();
     let events = Events::<ArchiveItem>::new(items);
 
-    crate::shared::select_archive(events)
+    select_multiple_archives(events)
 }
 
 pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
@@ -179,12 +180,6 @@ pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
                     match events.choose() {
                         Some(value) => {
                             should_quit = true;
-                            disable_raw_mode()?;
-                            stdout().execute(LeaveAlternateScreen)?;
-                            disable_raw_mode()?;
-                            stdout()
-                                .execute(LeaveAlternateScreen)
-                                .expect("failed releasing terminal");
                             match value.as_str() {
                                 "yes" => {
                                     return_value = Some(true);
@@ -204,6 +199,7 @@ pub fn confirm(text: String) -> Result<bool, anyhow::Error> {
             }
         }
     }
+    release_terminal().expect("Issue releasing terminal");
     Ok(return_value.unwrap())
 }
 
@@ -255,12 +251,6 @@ pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, an
                     match events.choose() {
                         Some(value) => {
                             should_quit = true;
-                            disable_raw_mode()?;
-                            stdout().execute(LeaveAlternateScreen)?;
-                            disable_raw_mode()?;
-                            stdout()
-                                .execute(LeaveAlternateScreen)
-                                .expect("failed releasing terminal");
                             return_value = Some(value);
                         }
                         None => {
@@ -272,5 +262,118 @@ pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, an
             }
         }
     }
+    release_terminal().expect("Issue releasing the temrinal");
     Ok(return_value.unwrap())
+}
+
+pub fn select_multiple_archives(
+    mut events: Events<ArchiveItem>,
+) -> Result<Vec<ArchiveItem>, anyhow::Error> {
+    enable_raw_mode()?;
+    stdout().execute(EnterAlternateScreen)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+    let mut should_quit = false;
+    let mut return_values: Vec<ArchiveItem> = vec![];
+    while !should_quit {
+        terminal.draw(|frame| {
+            let area = frame.size();
+            let list_items: Vec<ListItem> = events
+                .items
+                .iter()
+                .map(|x| {
+                    if return_values
+                        .clone()
+                        .iter()
+                        .map(|y| y.archive_id.as_str())
+                        .collect::<Vec<&str>>()
+                        .contains(&x.archive_id.as_str())
+                    {
+                        ListItem::new(Span::styled(
+                            format!("{} {} {}", x.archive_description, x.archive_id, " *"),
+                            Style::default().fg(Color::Green),
+                        ))
+                    } else {
+                        ListItem::new(Span::styled(
+                            format!("{} {}", x.archive_description.clone(), x.archive_id.clone()),
+                            Style::default().fg(Color::White),
+                        ))
+                    }
+                })
+                .collect();
+
+            let block = Block::default()
+                .title("Archives")
+                .green()
+                .borders(Borders::ALL);
+
+            let list = List::new(list_items)
+                .bold()
+                // .green()
+                .block(block)
+                .highlight_style(Style::new().italic())
+                .highlight_symbol("->")
+                .repeat_highlight_symbol(true);
+
+            frame.render_stateful_widget(list, area, &mut events.state)
+        })?;
+        if event::poll(std::time::Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                    should_quit = true;
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('j') {
+                    events.next();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
+                    events.previous();
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
+                    should_quit = true;
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char(' ') {
+                    match events.choose() {
+                        Some(value) => {
+                            let result_includes_item = return_values
+                                .clone()
+                                .iter()
+                                .map(|y| y.archive_id.as_str())
+                                .collect::<Vec<&str>>()
+                                .contains(&value.archive_id.as_str());
+                            if result_includes_item {
+                                return_values = return_values
+                                    .clone()
+                                    .into_iter()
+                                    .filter(|x| value.archive_id != x.archive_id)
+                                    .collect();
+                            } else {
+                                return_values.push(value);
+                            }
+                        }
+
+                        None => {
+                            should_quit = true;
+                            println!("could not match user input")
+                        }
+                    }
+                }
+                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Enter {
+                    should_quit = true;
+                }
+            }
+        }
+    }
+    release_terminal().expect("Issue releasing the terminal");
+    if return_values.len() >= 1 {
+        return Ok(return_values);
+    }
+    Err(anyhow!("You must select an archive!"))
+}
+
+fn release_terminal() -> Result<(), anyhow::Error> {
+    disable_raw_mode()?;
+    stdout().execute(LeaveAlternateScreen)?;
+    stdout()
+        .execute(LeaveAlternateScreen)
+        .expect("failed releasing terminal");
+    Ok(())
 }

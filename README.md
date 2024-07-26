@@ -1,7 +1,5 @@
 Basmati is a cli command like utility to stream archives up and down, to and from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to dowload your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfuly upload archives.
 
-Basmati is a rewrite (with many more features) of a Node.js application [glacier-wk](https://github.com/vhsconnect/glacier-wk). Basmati is working software that I use everyday. It is also intended as a learning project for me to write Rust. Feel free to open PRs, issues and nitpick the code.
-
 ### Environment and setup
 
 The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in your environment already. There is currently no way to pass those in as command line arguments.
@@ -131,3 +129,8 @@ Usage: basmati list-vaults
 Options:
   -h, --help  Print help
 ```
+
+## TODO
+
+- better sanitization for cache and TMP
+- better input handling when in tui
