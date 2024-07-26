@@ -4,13 +4,11 @@ use aws_sdk_glacier::Client;
 pub async fn do_deletion(client: &Client, vault_name: &String) -> Result<(), anyhow::Error> {
     let archives = get_archive_from_tui(vault_name).await?;
     match crate::shared::confirm(
+        String::from("Do you want to delete these archives"),
         archives
             .iter()
             .map(|x| format!(" {} created on {}", x.archive_description, x.creation_date,))
-            .fold(
-                String::from("Do you want to delete the following archives?"),
-                |x, y| x + &y + ";",
-            ),
+            .collect(),
     ) {
         Ok(true) => {
             let mut jobs = archives.iter().map(|archive| {
