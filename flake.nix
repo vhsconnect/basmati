@@ -43,12 +43,14 @@
     in
     with pkgs;
     {
-      devShells.default = mkShell {
-        nativeBuildInputs = [ rustc cargo gcc rustfmt clippy ];
-        shellHook = ''
-          export RUST_SRC_PATH="${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
-        '';
-      };
+      devShells.default = mkShell
+        {
+          nativeBuildInputs = [ rustc cargo gcc rustfmt clippy ];
+          shellHook = ''
+            export RUST_SRC_PATH="${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+            echo hello
+          '';
+        };
       packages.default = _builder.buildPackage
         {
           inherit pname;
