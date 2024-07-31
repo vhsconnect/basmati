@@ -55,7 +55,7 @@ async fn download_archive_by_id(
                                     .await
                                 {
                                     Ok(archive_output) => {
-                                        println!("Writing bytes to {}", output_as);
+                                        println!("Downloading {}", output_as);
                                         let mut stream = archive_output.body;
                                         while let Some(bytes) = stream.try_next().await? {
                                             file.write_all(&bytes).expect("Failed to write bytes");
