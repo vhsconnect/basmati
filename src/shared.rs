@@ -150,7 +150,7 @@ pub async fn save_job_output(job_output: InitiatedJob) -> Result<(), anyhow::Err
 
 pub async fn create_if_not_exists(path: &str) {
     match fs::create_dir_all(&path) {
-        Ok(_) => println!("Created the following directory successfully - {}", &path),
+        Ok(_) => println!("using basmati directory at {}", &path),
         Err(_) => clean_splits(path).await,
     }
 }

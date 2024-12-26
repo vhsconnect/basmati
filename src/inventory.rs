@@ -1,6 +1,10 @@
 use anyhow::Result;
+use aws_sdk_glacier::operation::get_job_output;
+use aws_sdk_glacier::operation::get_job_output::builders::GetJobOutputFluentBuilder;
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;
+use std::fs::File;
+use std::future::Pending;
 use std::io::Write;
 use std::time::Duration;
 use std::{fs, thread};
@@ -64,28 +68,18 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
                             let output_directory =
                                 format!("{}/vault/{}", basmati_directory(), &vault_name);
 
-                            if let Ok(mut file) =
+                            if let Ok(file) =
                                 fs::File::create(format!("{}/inventory.json", &output_directory))
                             {
-                                match client
+                                let builder = client
                                     .get_job_output()
                                     .account_id("-")
                                     .vault_name(vault_name)
-                                    .job_id(describe_output.job_id().unwrap())
-                                    .send()
-                                    .await
-                                {
-                                    Ok(inventory_output) => {
-                                        println!(
-                                            "Writing inventory to \"{}\"",
-                                            format!("{}/inventory.json", &output_directory)
-                                        );
-                                        let bytes = inventory_output.body.collect().await?.to_vec();
-                                        file.write_all(&bytes)?;
-                                        println!("Writing complete!");
-                                        break Ok(());
-                                    }
+                                    .job_id(describe_output.job_id().unwrap());
 
+                                match get_job_output(builder, file).await {
+                                    Ok(Status::Failed) => break Ok(()),
+                                    Ok(Status::Done) => break Ok(()),
                                     Err(reason) => {
                                         println!("failed to get inventory output {}", reason);
                                         break Ok(());
@@ -112,6 +106,29 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
         Err(reason) => {
             eprintln!("{}", reason);
             Ok(())
+        }
+    }
+}
+
+enum Status {
+    Failed = 1,
+    Done = 2,
+}
+
+async fn get_job_output(
+    builder: GetJobOutputFluentBuilder,
+    mut file: File,
+) -> Result<Status, anyhow::Error> {
+    match builder.send().await {
+        Ok(inventory_output) => {
+            let bytes = inventory_output.body.collect().await?.to_vec();
+            file.write_all(&bytes)?;
+            println!("Writing complete!");
+            Ok(Status::Done)
+        }
+        Err(reason) => {
+            println!("failed to get inventory output: {}", reason);
+            Ok(Status::Failed)
         }
     }
 }
