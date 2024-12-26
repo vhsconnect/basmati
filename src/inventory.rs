@@ -8,7 +8,7 @@ use std::{fs, thread};
 use crate::shared::{basmati_directory, save_job_output, InitiatedJob};
 
 pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
-    let init = client
+    let init_job = client
         .initiate_job()
         .account_id("-")
         .vault_name(vault_name)
@@ -24,7 +24,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
 
     // store job_id from initiate_job.
 
-    match init {
+    match init_job {
         Ok(init_ouput) => {
             println!("initiated inventory job successfuly...");
             let location = String::from(init_ouput.location().unwrap());
@@ -50,14 +50,14 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
                 }
             }
 
-            let job = client
+            let describe_job = client
                 .describe_job()
                 .account_id("-")
                 .vault_name(vault_name)
                 .job_id(init_ouput.job_id().unwrap());
 
             loop {
-                match job.clone().send().await {
+                match describe_job.clone().send().await {
                     Ok(mut describe_output) => {
                         if describe_output.completed() {
                             println!("job {} completed", describe_output.job_id.as_mut().unwrap());
