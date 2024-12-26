@@ -8,9 +8,11 @@ use crossterm::{
 };
 use home::home_dir;
 use ratatui::{prelude::*, widgets::*};
-use serde::Deserialize;
-use std::io::stdout;
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::io::Read;
+use std::io::{stdout, Write};
+use std::time;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ArchiveItem {
@@ -26,6 +28,15 @@ pub struct ArchiveItem {
     #[serde(rename = "SHA256TreeHash")]
     #[allow(dead_code)]
     sha256_tree_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InitiatedJob {
+    pub location: String,
+    pub job_id: String,
+    // pub job_output_path: String,
+    pub vault: String,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,18 +107,59 @@ pub fn basmati_directory() -> String {
     }
 }
 
+pub async fn save_job_output(job_output: InitiatedJob) -> Result<(), anyhow::Error> {
+    let job_dir = format!("{}/jobs", basmati_directory());
+    let path = format!("{}/jobs.json", job_dir);
+    create_if_not_exists(&job_dir).await;
+
+    let file_handle = fs::OpenOptions::new()
+        .write(true) // Open for writing
+        .read(true) //
+        .create(true) // Create the file if it doesn't exist
+        .open(&path);
+
+    match file_handle {
+        Ok(mut file) => {
+            let mut serialized_items = String::new();
+            file.read_to_string(&mut serialized_items)
+                .expect("Error reading jobs file");
+            let current_items: Result<Vec<InitiatedJob>, serde_json::Error> =
+                serde_json::from_str(&serialized_items);
+            match current_items {
+                Ok(mut items) => {
+                    items.push(job_output);
+                    let buffer = serde_json::to_vec(&items)?;
+                    file = fs::OpenOptions::new()
+                        .write(true) // Open for writing
+                        .truncate(true)
+                        .open(&path)?;
+
+                    file.write_all(&buffer)?;
+                    Ok(())
+                }
+                Err(err) => {
+                    let buffer = serde_json::to_vec(&vec![job_output])?;
+                    file.write_all(&buffer)?;
+                    Ok(())
+                }
+            }
+        }
+        Err(e) => Err(anyhow!("{:?}", e)),
+    }
+}
+
 pub async fn create_if_not_exists(path: &str) {
-    match std::fs::create_dir_all(&path) {
+    match fs::create_dir_all(&path) {
         Ok(_) => println!("Created the following directory successfully - {}", &path),
         Err(_) => clean_splits(path).await,
     }
 }
 
 pub async fn clean_splits(temp_dir: &str) {
-    match std::fs::read_dir(temp_dir) {
+    match fs::read_dir(temp_dir) {
         Ok(dir) => {
             for entry in dir {
-                std::fs::remove_file(entry.unwrap().path()).unwrap();
+                fs::remove_file(entry.unwrap().path()).unwrap();
             }
             println!("{}", Colorize::yellow("Temporary files deleted"))
         }
@@ -118,7 +170,7 @@ pub async fn clean_splits(temp_dir: &str) {
 }
 
 pub async fn get_archive_from_tui(vault_name: &String) -> Result<Vec<ArchiveItem>, anyhow::Error> {
-    let mut file_handle = std::fs::File::open(format!(
+    let mut file_handle = fs::File::open(format!(
         "{}/vault/{}/inventory.json",
         basmati_directory(),
         &vault_name
@@ -183,7 +235,7 @@ pub fn confirm(title: String, confirmation_items: Vec<String>) -> Result<bool, a
             frame.render_widget(display_text, areas[0]);
             frame.render_stateful_widget(list, areas[1], &mut events.state);
         })?;
-        if event::poll(std::time::Duration::from_millis(50))? {
+        if event::poll(time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     should_quit = true;
@@ -260,7 +312,7 @@ pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, an
 
             frame.render_stateful_widget(list, area, &mut events.state)
         })?;
-        if event::poll(std::time::Duration::from_millis(50))? {
+        if event::poll(time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     should_quit = true;
@@ -349,7 +401,7 @@ pub fn select_multiple_archives(
 
             frame.render_stateful_widget(list, area, &mut events.state)
         })?;
-        if event::poll(std::time::Duration::from_millis(50))? {
+        if event::poll(time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     should_quit = true;

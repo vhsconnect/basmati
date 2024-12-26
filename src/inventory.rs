@@ -5,7 +5,7 @@ use std::io::Write;
 use std::time::Duration;
 use std::{fs, thread};
 
-use crate::shared::basmati_directory;
+use crate::shared::{basmati_directory, save_job_output, InitiatedJob};
 
 pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
     let init = client
@@ -22,9 +22,33 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
         .send()
         .await;
 
+    // store job_id from initiate_job.
+
     match init {
         Ok(init_ouput) => {
             println!("initiated inventory job successfuly...");
+            let location = String::from(init_ouput.location().unwrap());
+            let job_id = String::from(init_ouput.job_id().unwrap());
+            let timestamp = chrono::Utc::now().timestamp();
+            let url_parts: Vec<&str> = location.split("/").collect();
+            if url_parts.len() < 3 {
+                panic!("malformed url, exiting")
+            }
+            let vault = url_parts[3].to_owned();
+            let output_struct = InitiatedJob {
+                location,
+                job_id,
+                vault,
+                timestamp,
+            };
+            match save_job_output(output_struct).await {
+                Ok(_) => {
+                    println!("operation succeded")
+                }
+                Err(err) => {
+                    println!("{:?}", err)
+                }
+            }
 
             let job = client
                 .describe_job()
