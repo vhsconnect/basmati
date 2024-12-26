@@ -1,10 +1,8 @@
-use anyhow::Result;
-use aws_sdk_glacier::operation::get_job_output;
+use anyhow::{anyhow, Result};
 use aws_sdk_glacier::operation::get_job_output::builders::GetJobOutputFluentBuilder;
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;
 use std::fs::File;
-use std::future::Pending;
 use std::io::Write;
 use std::time::Duration;
 use std::{fs, thread};
@@ -26,8 +24,6 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
         .send()
         .await;
 
-    // store job_id from initiate_job.
-
     match init_job {
         Ok(init_ouput) => {
             println!("initiated inventory job successfuly...");
@@ -47,7 +43,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
             };
             match save_job_output(output_struct).await {
                 Ok(_) => {
-                    println!("operation succeded")
+                    println!("This job is valid for 72 hours, saving...")
                 }
                 Err(err) => {
                     println!("{:?}", err)
@@ -60,35 +56,11 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
                 .vault_name(vault_name)
                 .job_id(init_ouput.job_id().unwrap());
 
-            loop {
+            if let Ok(mut describe_output) = loop {
                 match describe_job.clone().send().await {
-                    Ok(mut describe_output) => {
-                        if describe_output.completed() {
-                            println!("job {} completed", describe_output.job_id.as_mut().unwrap());
-                            let output_directory =
-                                format!("{}/vault/{}", basmati_directory(), &vault_name);
-
-                            if let Ok(file) =
-                                fs::File::create(format!("{}/inventory.json", &output_directory))
-                            {
-                                let builder = client
-                                    .get_job_output()
-                                    .account_id("-")
-                                    .vault_name(vault_name)
-                                    .job_id(describe_output.job_id().unwrap());
-
-                                match get_job_output(builder, file).await {
-                                    Ok(Status::Failed) => break Ok(()),
-                                    Ok(Status::Done) => break Ok(()),
-                                    Err(reason) => {
-                                        println!("failed to get inventory output {}", reason);
-                                        break Ok(());
-                                    }
-                                }
-                            } else {
-                                fs::create_dir_all(&output_directory)
-                                    .expect("Could not write to file nor create directory");
-                            }
+                    Ok(output) => {
+                        if output.completed() {
+                            break Ok(output);
                         } else {
                             println!(
                                 "job is not ready - going to sleep and will try again in an hour",
@@ -96,11 +68,38 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<()> {
                             thread::sleep(Duration::from_secs(60 * 60))
                         }
                     }
-                    Err(reason) => {
-                        println!("describe fail - {:?}", reason);
-                        break Ok(());
-                    }
+                    Err(reason) => break Err(anyhow!(format!("describe_job failed: {}", reason))),
                 }
+            } {
+                println!("job {} completed", describe_output.job_id.as_mut().unwrap());
+                let output_directory = format!("{}/vault/{}", basmati_directory(), &vault_name);
+
+                fs::create_dir_all(&output_directory)
+                    .expect("Could not write to file nor create directory");
+                if let Ok(file) = fs::File::create(format!("{}/inventory.json", &output_directory))
+                {
+                    let builder = client
+                        .get_job_output()
+                        .account_id("-")
+                        .vault_name(vault_name)
+                        .job_id(describe_output.job_id().unwrap());
+
+                    match get_job_output(builder, file).await {
+                        Ok(Status::Failed) => Ok(()),
+                        Ok(Status::Done) => Ok(()),
+                        Err(reason) => {
+                            println!("failed to get inventory output {}", reason);
+                            Ok(())
+                        }
+                    }
+                } else {
+                    Err(anyhow!(format!(
+                        "Could not create inventory file in {}",
+                        &output_directory
+                    )))
+                }
+            } else {
+                Err(anyhow!(format!("inventory describe job failed")))
             }
         }
         Err(reason) => {
