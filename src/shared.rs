@@ -14,6 +14,8 @@ use std::io::Read;
 use std::io::{stdout, Write};
 use std::time;
 
+pub const FOURTY_EIGHT_HOURS: i64 = 172800;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum JobType {
     Inventory = 1,
@@ -115,7 +117,11 @@ pub fn basmati_directory() -> String {
 // this can be generic over any kinf of job in the future.
 pub async fn delete_invetory_job(vault: String) -> Result<(), anyhow::Error> {
     let jobs = get_jobs().await?;
-    let jobs: Vec<InitiatedJob> = jobs.into_iter().filter(|x| x.vault != vault).collect();
+    let jobs: Vec<InitiatedJob> = jobs
+        .into_iter()
+        .filter(|x| x.vault != vault)
+        .filter(|x| chrono::Utc::now().timestamp() - x.timestamp < FOURTY_EIGHT_HOURS)
+        .collect();
     let buffer = serde_json::to_vec(&jobs)?;
     job_writer(buffer).await?;
     Ok(())

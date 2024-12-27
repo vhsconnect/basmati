@@ -12,6 +12,7 @@ use std::{fs, thread};
 
 use crate::shared::{
     basmati_directory, delete_invetory_job, get_jobs, save_job_output, InitiatedJob, JobType,
+    FOURTY_EIGHT_HOURS,
 };
 
 enum Status {
@@ -19,7 +20,6 @@ enum Status {
     Done = 2,
     Pending = 3,
 }
-const FOURTY_EIGHT_HOURS: i64 = 172800;
 
 async fn resolve_pending_inventory(
     client: &Client,
