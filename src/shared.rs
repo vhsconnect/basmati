@@ -14,6 +14,11 @@ use std::io::Read;
 use std::io::{stdout, Write};
 use std::time;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum JobType {
+    Inventory = 1,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct ArchiveItem {
     #[serde(rename = "ArchiveId")]
@@ -34,9 +39,9 @@ pub struct ArchiveItem {
 pub struct InitiatedJob {
     pub location: String,
     pub job_id: String,
-    // pub job_output_path: String,
     pub vault: String,
     pub timestamp: i64,
+    pub job_type: JobType,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,51 +112,58 @@ pub fn basmati_directory() -> String {
     }
 }
 
-pub async fn save_job_output(job_output: InitiatedJob) -> Result<(), anyhow::Error> {
+// this can be generic over any kinf of job in the future.
+pub async fn delete_invetory_job(vault: String) -> Result<(), anyhow::Error> {
+    let jobs = get_jobs().await?;
+    let jobs: Vec<InitiatedJob> = jobs.into_iter().filter(|x| x.vault != vault).collect();
+    let buffer = serde_json::to_vec(&jobs)?;
+    job_writer(buffer).await?;
+    Ok(())
+}
+
+pub async fn get_jobs() -> Result<Vec<InitiatedJob>, anyhow::Error> {
     let job_dir = format!("{}/jobs", basmati_directory());
     let path = format!("{}/jobs.json", job_dir);
-    create_if_not_exists(&job_dir).await;
-
     let file_handle = fs::OpenOptions::new()
-        .write(true) // Open for writing
         .read(true) //
-        .create(true) // Create the file if it doesn't exist
         .open(&path);
-
     match file_handle {
         Ok(mut file) => {
             let mut serialized_items = String::new();
-            file.read_to_string(&mut serialized_items)
-                .expect("Error reading jobs file");
-            let current_items: Result<Vec<InitiatedJob>, serde_json::Error> =
-                serde_json::from_str(&serialized_items);
-            match current_items {
-                Ok(mut items) => {
-                    items.push(job_output);
-                    let buffer = serde_json::to_vec(&items)?;
-                    file = fs::OpenOptions::new()
-                        .write(true) // Open for writing
-                        .truncate(true)
-                        .open(&path)?;
-
-                    file.write_all(&buffer)?;
-                    Ok(())
-                }
-                Err(err) => {
-                    let buffer = serde_json::to_vec(&vec![job_output])?;
-                    file.write_all(&buffer)?;
-                    Ok(())
-                }
-            }
+            file.read_to_string(&mut serialized_items)?;
+            let current_items: Vec<InitiatedJob> =
+                serde_json::from_str(&serialized_items).unwrap_or_else(|_| vec![]);
+            Ok(current_items)
         }
-        Err(e) => Err(anyhow!("{:?}", e)),
+        Err(_) => Ok(vec![]),
     }
 }
 
+pub async fn job_writer(bytes: Vec<u8>) -> Result<(), anyhow::Error> {
+    let job_dir = format!("{}/jobs", basmati_directory());
+    create_if_not_exists(&job_dir).await;
+    let path = format!("{}/jobs.json", job_dir);
+    let mut file = fs::OpenOptions::new()
+        .truncate(true)
+        .write(true)
+        .create(true)
+        .open(&path)?;
+    file.write_all(&bytes)?;
+    Ok(())
+}
+
+pub async fn save_job_output(job_output: InitiatedJob) -> Result<(), anyhow::Error> {
+    let mut jobs = get_jobs().await.unwrap();
+    jobs.push(job_output);
+    let buffer = serde_json::to_vec(&jobs)?;
+    job_writer(buffer).await?;
+    Ok(())
+}
+
 pub async fn create_if_not_exists(path: &str) {
-    match fs::create_dir_all(&path) {
-        Ok(_) => println!("using basmati directory at {}", &path),
-        Err(_) => clean_splits(path).await,
+    if let Err(err) = fs::create_dir_all(&path) {
+        println!("{:?}", err);
+        clean_splits(path).await
     }
 }
 

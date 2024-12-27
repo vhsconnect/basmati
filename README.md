@@ -134,3 +134,4 @@ Options:
 
 - better sanitization for cache and TMP
 - better input handling when in tui
+- Add option to view inventory - really same as download screen - perhaps an alias?
