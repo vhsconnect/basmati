@@ -1,12 +1,9 @@
-use crate::shared::get_archive_from_tui;
+use crate::inventory::{describe_job_loop, get_job_output};
+use crate::shared::{get_archive_from_tui, Status};
 use anyhow::{anyhow, Result};
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;
-use std::io::Write;
-use std::time::Duration;
-use std::{fs, thread};
-
-const SLEEP_DURATION: u64 = 60 * 60;
+use std::fs;
 
 async fn download_archive_by_id(
     client: &Client,
@@ -33,55 +30,40 @@ async fn download_archive_by_id(
         Ok(init_ouput) => {
             println!("initiated retrieval job successfuly...");
 
-            let job = client
+            let describe_builder = client
                 .describe_job()
                 .account_id("-")
                 .vault_name(vault_name)
                 .job_id(init_ouput.job_id().unwrap());
 
-            loop {
-                match job.clone().send().await {
-                    Ok(mut describe_output) => {
-                        if describe_output.completed() {
-                            println!("job {} completed", describe_output.job_id.as_mut().unwrap());
+            if let Ok(mut describe_output) = describe_job_loop(describe_builder.clone()).await {
+                println!(
+                    "job {} is ready, attempting to download",
+                    describe_output.job_id.as_mut().unwrap()
+                );
 
-                            if let Ok(mut file) = fs::File::create(output_as) {
-                                match client
-                                    .get_job_output()
-                                    .account_id("-")
-                                    .vault_name(vault_name)
-                                    .job_id(describe_output.job_id().unwrap())
-                                    .send()
-                                    .await
-                                {
-                                    Ok(archive_output) => {
-                                        println!("Downloading {}", output_as);
-                                        let mut stream = archive_output.body;
-                                        while let Some(bytes) = stream.try_next().await? {
-                                            file.write_all(&bytes).expect("Failed to write bytes");
-                                        }
-                                        println!("Writing complete!");
-                                        break Ok(());
-                                    }
+                let file = fs::File::create(output_as).expect("failed to create user defined file");
+                let builder = client
+                    .get_job_output()
+                    .account_id("-")
+                    .vault_name(vault_name)
+                    .job_id(describe_output.job_id().unwrap());
 
-                                    Err(reason) => {
-                                        println!("failed to get archive output {}", reason);
-                                        break Ok(());
-                                    }
-                                }
-                            }
-                        } else {
-                            println!(
-                                "job is not ready - going to sleep and will try again in an hour",
-                            );
-                            thread::sleep(Duration::from_secs(SLEEP_DURATION))
-                        }
+                match get_job_output(builder, file).await {
+                    Ok(Status::Done) => {
+                        println!("Writing complete!");
+                        return Ok(());
                     }
-                    Err(reason) => {
-                        println!("describe fail - {:?}", reason);
-                        break Ok(());
+                    Err(err) => {
+                        println!("failed to get archive output, {:?}", err);
+                        return Ok(());
+                    }
+                    _ => {
+                        return Ok(());
                     }
                 }
+            } else {
+                Err(anyhow!(format!("retrieval describe job failed")))
             }
         }
         Err(reason) => {

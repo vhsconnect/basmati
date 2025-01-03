@@ -15,15 +15,15 @@ use std::os::unix::fs::MetadataExt;
 const ONE_MB: usize = 1048576;
 const MAX_PART_AMOUNT: u64 = 10000;
 
-struct InfiniteIndeces {
+pub struct InfiniteIndeces {
     value: usize,
 }
 
 impl InfiniteIndeces {
-    fn new() -> Self {
+    pub fn new() -> Self {
         InfiniteIndeces { value: 0 }
     }
-    fn next(&mut self) -> usize {
+    pub fn next(&mut self) -> usize {
         self.value = self.value + 1;
         self.value
     }

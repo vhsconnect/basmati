@@ -11,49 +11,52 @@ use std::time::Duration;
 use std::{fs, thread};
 
 use crate::shared::{
-    basmati_directory, delete_invetory_job, get_jobs, save_job_output, InitiatedJob, JobType,
-    FOURTY_EIGHT_HOURS,
+    basmati_directory, delete_expired_jobs_from_local, delete_job_from_local, get_jobs,
+    save_job_output, InitiatedJob, JobType, Status,
 };
 
-enum Status {
-    Failed = 1,
-    Done = 2,
-    Pending = 3,
-}
+const SLEEP_DURATION: u64 = 60 * 60;
 
-async fn resolve_pending_inventory(
+async fn resolve_all_pending(
     client: &Client,
+    job_type: JobType,
 ) -> Result<(Status, Option<String>), anyhow::Error> {
+    delete_expired_jobs_from_local().await?;
     let jobs = get_jobs().await?;
-    let mut filtered = jobs
-        .iter()
-        .filter(|&x| chrono::Utc::now().timestamp() - x.timestamp < FOURTY_EIGHT_HOURS)
-        .map(|x| {
-            (
-                client
-                    .describe_job()
-                    .account_id("-")
-                    .vault_name(&x.vault)
-                    .job_id(&x.job_id),
-                &x.vault,
-            )
-        });
+    let mut pending_jobs = jobs.iter().filter(|&x| x.job_type == job_type).map(|x| {
+        (
+            client
+                .describe_job()
+                .account_id("-")
+                .vault_name(&x.vault)
+                .job_id(&x.job_id),
+            &x.vault,
+        )
+    });
 
-    while let Some((describe_builder, vault)) = filtered.next() {
+    while let Some((describe_builder, vault)) = pending_jobs.next() {
         if let Ok((Status::Done, Some(output))) = describe_job_output(&describe_builder).await {
+            let desc = output.job_description().unwrap();
+            let job_id = output.job_id().unwrap();
             let output_builder = client
                 .get_job_output()
                 .account_id("-")
                 .vault_name(vault)
                 .job_id(output.job_id().unwrap());
 
-            let output_directory = format!("{}/vault/{}", basmati_directory(), &vault);
+            let write_file = match job_type {
+                JobType::Inventory => {
+                    let output_directory = format!("{}/vault/{}", basmati_directory(), &vault);
+                    fs::create_dir_all(&output_directory)
+                        .expect("Could not write to file nor create directory");
+                    format!("{}/inventory.json", &output_directory)
+                }
+                JobType::Retrieval => desc.to_owned(),
+            };
 
-            fs::create_dir_all(&output_directory)
-                .expect("Could not write to file nor create directory");
-            let file = fs::File::create(format!("{}/inventory.json", &output_directory))?;
+            let file = fs::File::create(write_file)?;
             if let Ok(Status::Done) = get_job_output(output_builder, file).await {
-                delete_invetory_job(vault.to_owned()).await?;
+                delete_job_from_local(job_id.to_owned()).await?;
                 return Ok((Status::Done, Some(vault.to_owned())));
             } else {
                 return Ok((Status::Failed, None));
@@ -65,7 +68,7 @@ async fn resolve_pending_inventory(
 }
 
 pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), anyhow::Error> {
-    match resolve_pending_inventory(client).await {
+    match resolve_all_pending(client, JobType::Inventory).await {
         Ok((Status::Done, Some(vault))) => {
             println!("resolved previous job for vault {}, exiting", vault);
             return Ok(());
@@ -127,6 +130,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
                     .expect("Could not write to file nor create directory");
                 if let Ok(file) = fs::File::create(format!("{}/inventory.json", &output_directory))
                 {
+                    let job_id = describe_output.job_id().unwrap();
                     let output_builder = client
                         .get_job_output()
                         .account_id("-")
@@ -141,7 +145,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
                                 "inventory job completed successfuly for vault {}",
                                 vault.to_owned()
                             );
-                            delete_invetory_job(vault.to_owned()).await?;
+                            delete_job_from_local(job_id.to_owned()).await?;
                             Ok(())
                         }
                         Err(reason) => {
@@ -166,7 +170,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
     }
 }
 
-async fn get_job_output(
+pub async fn get_job_output(
     builder: GetJobOutputFluentBuilder,
     mut file: File,
 ) -> Result<Status, anyhow::Error> {
@@ -183,7 +187,7 @@ async fn get_job_output(
         }
     }
 }
-async fn describe_job_loop(
+pub async fn describe_job_loop(
     builder: DescribeJobFluentBuilder,
 ) -> Result<DescribeJobOutput, anyhow::Error> {
     loop {
@@ -193,7 +197,7 @@ async fn describe_job_loop(
             }
             Ok((Status::Pending, _)) => {
                 println!("job is not ready - going to sleep and will try again in an hour",);
-                thread::sleep(Duration::from_secs(60 * 60))
+                thread::sleep(Duration::from_secs(SLEEP_DURATION))
             }
             _ => {
                 println!("describe_job failed");
