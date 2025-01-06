@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use aws_sdk_glacier::operation::initiate_job::InitiateJobOutput;
 use colored::Colorize;
 use crossterm::terminal::size;
 use crossterm::ExecutableCommand;
@@ -171,9 +172,28 @@ pub async fn job_writer(bytes: Vec<u8>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn save_job_output(job_output: InitiatedJob) -> Result<(), anyhow::Error> {
+pub async fn save_job_output(
+    init_job_output: InitiateJobOutput,
+    job_type: JobType,
+) -> Result<(), anyhow::Error> {
+    let location = String::from(init_job_output.location().unwrap());
+    let job_id = String::from(init_job_output.job_id().unwrap());
+    let timestamp = chrono::Utc::now().timestamp();
+    let url_parts: Vec<&str> = location.split("/").collect();
+    if url_parts.len() < 3 {
+        panic!("malformed url, exiting")
+    }
+    let vault = url_parts[3].to_owned();
+    let output_struct = InitiatedJob {
+        location,
+        job_id,
+        vault: vault.clone(),
+        timestamp,
+        job_type,
+    };
+
     let mut jobs = get_jobs().await.unwrap();
-    jobs.push(job_output);
+    jobs.push(output_struct);
     let buffer = serde_json::to_vec(&jobs)?;
     job_writer(buffer).await?;
     Ok(())

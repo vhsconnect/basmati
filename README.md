@@ -136,3 +136,6 @@ Options:
 - better input handling when in tui
 - Add option to view inventory - really same as download screen - perhaps an alias?
 - Add option for just finishing pending jobs without creating new jobs
+- ensure output_as option works
+
+

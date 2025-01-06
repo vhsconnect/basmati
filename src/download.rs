@@ -1,5 +1,5 @@
-use crate::inventory::{describe_job_loop, get_job_output};
-use crate::shared::{get_archive_from_tui, Status};
+use crate::inventory::{describe_job_loop, get_job_output, resolve_all_pending};
+use crate::shared::{get_archive_from_tui, save_job_output, JobType, Status};
 use anyhow::{anyhow, Result};
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;
@@ -9,7 +9,7 @@ async fn download_archive_by_id(
     client: &Client,
     vault_name: &String,
     archive_id: String,
-    output_as: &String,
+    output_as: String,
 ) -> Result<(), anyhow::Error> {
     println!("download_archive_by_id gonna init, {}", archive_id);
 
@@ -29,6 +29,10 @@ async fn download_archive_by_id(
     match init {
         Ok(init_ouput) => {
             println!("initiated retrieval job successfuly...");
+
+            save_job_output(init_ouput.clone(), JobType::Retrieval)
+                .await
+                .expect("Was not able to save metadata");
 
             let describe_builder = client
                 .describe_job()
@@ -75,19 +79,47 @@ async fn download_archive_by_id(
 
 pub async fn do_download(
     client: &Client,
-    vault_name: &String,
-    output_as: &String,
+    vault_name: &Option<String>,
+    output_as: &Option<String>,
+    pending: bool,
 ) -> Result<(), anyhow::Error> {
-    match get_archive_from_tui(vault_name).await {
+    if pending {
+        match resolve_all_pending(client, crate::shared::JobType::Retrieval).await {
+            Ok(Status::Done) => {
+                println!("Finished processing pending archive retrievals");
+                return Ok(());
+            }
+            _ => {
+                println!("Something went wrong");
+                return Ok(());
+            }
+        }
+    }
+    let vault_name = String::from(
+        &vault_name
+            .clone()
+            .expect("Expected vault_name to be defined"),
+    );
+
+    match get_archive_from_tui(&vault_name).await {
         Ok(archives) => {
             if archives.len() > 1 {
                 return Err(anyhow!(
                     "You must select a single archive and no more than one archive to download"
                 ));
             }
+            let output_as = output_as
+                .clone()
+                .expect("expected output_as path to be defined");
+
             let archive = archives.first().unwrap();
-            match download_archive_by_id(&client, vault_name, archive.archive_id.clone(), output_as)
-                .await
+            match download_archive_by_id(
+                &client,
+                &vault_name,
+                archive.archive_id.clone(),
+                output_as,
+            )
+            .await
             {
                 Ok(_success_op) => {
                     println!("Operation completed successfully")

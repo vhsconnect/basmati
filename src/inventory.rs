@@ -12,15 +12,15 @@ use std::{fs, thread};
 
 use crate::shared::{
     basmati_directory, delete_expired_jobs_from_local, delete_job_from_local, get_jobs,
-    save_job_output, InitiatedJob, JobType, Status,
+    save_job_output, JobType, Status,
 };
 
 const SLEEP_DURATION: u64 = 60 * 60;
 
-async fn resolve_all_pending(
+pub async fn resolve_all_pending(
     client: &Client,
     job_type: JobType,
-) -> Result<(Status, Option<String>), anyhow::Error> {
+) -> Result<Status, anyhow::Error> {
     delete_expired_jobs_from_local().await?;
     let jobs = get_jobs().await?;
     let mut pending_jobs = jobs.iter().filter(|&x| x.job_type == job_type).map(|x| {
@@ -36,7 +36,6 @@ async fn resolve_all_pending(
 
     while let Some((describe_builder, vault)) = pending_jobs.next() {
         if let Ok((Status::Done, Some(output))) = describe_job_output(&describe_builder).await {
-            let desc = output.job_description().unwrap();
             let job_id = output.job_id().unwrap();
             let output_builder = client
                 .get_job_output()
@@ -51,27 +50,25 @@ async fn resolve_all_pending(
                         .expect("Could not write to file nor create directory");
                     format!("{}/inventory.json", &output_directory)
                 }
-                JobType::Retrieval => desc.to_owned(),
+                JobType::Retrieval => String::from(job_id),
             };
 
             let file = fs::File::create(write_file)?;
             if let Ok(Status::Done) = get_job_output(output_builder, file).await {
                 delete_job_from_local(job_id.to_owned()).await?;
-                return Ok((Status::Done, Some(vault.to_owned())));
             } else {
-                return Ok((Status::Failed, None));
+                return Ok(Status::Failed);
             }
         }
     }
 
-    Ok((Status::Pending, None))
+    Ok(Status::Done)
 }
 
 pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), anyhow::Error> {
     match resolve_all_pending(client, JobType::Inventory).await {
-        Ok((Status::Done, Some(vault))) => {
-            println!("resolved previous job for vault {}, exiting", vault);
-            return Ok(());
+        Ok(Status::Done) => {
+            println!("Finished processing pending inventory jobs");
         }
         _ => {}
     };
@@ -92,29 +89,9 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
     match init_job {
         Ok(init_ouput) => {
             println!("initiated inventory job successfuly...");
-            let location = String::from(init_ouput.location().unwrap());
-            let job_id = String::from(init_ouput.job_id().unwrap());
-            let timestamp = chrono::Utc::now().timestamp();
-            let url_parts: Vec<&str> = location.split("/").collect();
-            if url_parts.len() < 3 {
-                panic!("malformed url, exiting")
-            }
-            let vault = url_parts[3].to_owned();
-            let output_struct = InitiatedJob {
-                location,
-                job_id,
-                vault: vault.clone(),
-                timestamp,
-                job_type: JobType::Inventory,
-            };
-            match save_job_output(output_struct).await {
-                Ok(_) => {
-                    println!("This job is valid for 72 hours, saving...")
-                }
-                Err(err) => {
-                    println!("{:?}", err)
-                }
-            }
+            save_job_output(init_ouput.clone(), JobType::Inventory)
+                .await
+                .expect("Was not able to save metadata");
 
             let describe_builder = client
                 .describe_job()
@@ -143,7 +120,7 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
                         Ok(Status::Done) => {
                             println!(
                                 "inventory job completed successfuly for vault {}",
-                                vault.to_owned()
+                                vault_name
                             );
                             delete_job_from_local(job_id.to_owned()).await?;
                             Ok(())
@@ -175,10 +152,14 @@ pub async fn get_job_output(
     mut file: File,
 ) -> Result<Status, anyhow::Error> {
     match builder.send().await {
-        Ok(inventory_output) => {
-            let bytes = inventory_output.body.collect().await?.to_vec();
+        Ok(output) => {
+            let desc = String::from(output.archive_description().unwrap_or_else(|| "inventory"));
+            // Downloading
+            let bytes = output.body.collect().await?.to_vec();
+            println!("{}: {}", Colorize::green("Downloading"), desc);
+            // Writing from memory to disk
             file.write_all(&bytes)?;
-            println!("{}", Colorize::green("Writing complete!"));
+            println!("{}: {}", Colorize::green("Writing complete"), desc);
             Ok(Status::Done)
         }
         Err(reason) => {
