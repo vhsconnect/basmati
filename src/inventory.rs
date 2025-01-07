@@ -154,12 +154,12 @@ pub async fn get_job_output(
     match builder.send().await {
         Ok(output) => {
             let desc = String::from(output.archive_description().unwrap_or_else(|| "inventory"));
-            // Downloading
-            let bytes = output.body.collect().await?.to_vec();
-            println!("{}: {}", Colorize::green("Downloading"), desc);
-            // Writing from memory to disk
-            file.write_all(&bytes)?;
-            println!("{}: {}", Colorize::green("Writing complete"), desc);
+            let mut buffer = output.body;
+            println!("{}: {}", Colorize::green("downloading"), desc);
+            while let Some(bytes) = buffer.try_next().await? {
+                file.write(&bytes)?;
+            }
+            println!("{}: {}", Colorize::green("writing complete"), desc);
             Ok(Status::Done)
         }
         Err(reason) => {
