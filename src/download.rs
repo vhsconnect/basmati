@@ -1,5 +1,8 @@
-use crate::inventory::{describe_job_loop, get_job_output, resolve_all_pending};
-use crate::shared::{get_archive_from_tui, save_job_output, JobType, Status};
+use crate::inventory::resolve_all_pending;
+
+use crate::shared::{
+    describe_job_loop, get_archive_from_tui, get_job_output, save_job_output, JobType, Status,
+};
 use anyhow::{anyhow, Result};
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;

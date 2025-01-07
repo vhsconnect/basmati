@@ -1,21 +1,12 @@
 use anyhow::anyhow;
-use aws_sdk_glacier::operation::describe_job::builders::DescribeJobFluentBuilder;
-use aws_sdk_glacier::operation::describe_job::DescribeJobOutput;
-use aws_sdk_glacier::operation::get_job_output::builders::GetJobOutputFluentBuilder;
 use aws_sdk_glacier::types::JobParameters;
 use aws_sdk_glacier::Client;
-use colored::Colorize;
-use std::fs::File;
-use std::io::Write;
-use std::time::Duration;
-use std::{fs, thread};
+use std::fs;
 
 use crate::shared::{
-    basmati_directory, delete_expired_jobs_from_local, delete_job_from_local, get_jobs,
-    save_job_output, JobType, Status,
+    basmati_directory, delete_expired_jobs_from_local, delete_job_from_local, describe_job_loop,
+    describe_job_output, get_job_output, get_jobs, save_job_output, JobType, Status,
 };
-
-const SLEEP_DURATION: u64 = 60 * 60;
 
 pub async fn resolve_all_pending(
     client: &Client,
@@ -144,60 +135,5 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
             eprintln!("{}", reason);
             Ok(())
         }
-    }
-}
-
-pub async fn get_job_output(
-    builder: GetJobOutputFluentBuilder,
-    mut file: File,
-) -> Result<Status, anyhow::Error> {
-    match builder.send().await {
-        Ok(output) => {
-            let desc = String::from(output.archive_description().unwrap_or_else(|| "inventory"));
-            let mut buffer = output.body;
-            println!("{}: {}", Colorize::green("downloading"), desc);
-            while let Some(bytes) = buffer.try_next().await? {
-                file.write(&bytes)?;
-            }
-            println!("{}: {}", Colorize::green("writing complete"), desc);
-            Ok(Status::Done)
-        }
-        Err(reason) => {
-            println!("failed to get inventory output: {}", reason);
-            Ok(Status::Failed)
-        }
-    }
-}
-pub async fn describe_job_loop(
-    builder: DescribeJobFluentBuilder,
-) -> Result<DescribeJobOutput, anyhow::Error> {
-    loop {
-        match describe_job_output(&builder).await {
-            Ok((Status::Done, output)) => {
-                break Ok(output.unwrap());
-            }
-            Ok((Status::Pending, _)) => {
-                println!("job is not ready - going to sleep and will try again in an hour",);
-                thread::sleep(Duration::from_secs(SLEEP_DURATION))
-            }
-            _ => {
-                println!("describe_job failed");
-                break Err(anyhow!("describe error failed!"));
-            }
-        }
-    }
-}
-async fn describe_job_output(
-    builder: &DescribeJobFluentBuilder,
-) -> Result<(Status, Option<DescribeJobOutput>), anyhow::Error> {
-    match builder.clone().send().await {
-        Ok(output) => {
-            if output.completed() {
-                Ok((Status::Done, Some(output)))
-            } else {
-                Ok((Status::Pending, None))
-            }
-        }
-        Err(err) => Err(anyhow!(err)),
     }
 }

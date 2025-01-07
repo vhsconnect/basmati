@@ -1,6 +1,12 @@
 use anyhow::anyhow;
+use aws_sdk_glacier::operation::describe_job::builders::DescribeJobFluentBuilder;
+use aws_sdk_glacier::operation::describe_job::DescribeJobOutput;
 use aws_sdk_glacier::operation::initiate_job::InitiateJobOutput;
 use colored::Colorize;
+use std::fs::File;
+use std::time::Duration;
+
+use aws_sdk_glacier::operation::get_job_output::builders::GetJobOutputFluentBuilder;
 use crossterm::terminal::size;
 use crossterm::ExecutableCommand;
 use crossterm::{
@@ -10,12 +16,13 @@ use crossterm::{
 use home::home_dir;
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::io::Read;
 use std::io::{stdout, Write};
 use std::time;
+use std::{fs, thread};
 
 pub const FOURTY_EIGHT_HOURS: i64 = 172800;
+const SLEEP_DURATION: u64 = 60 * 60;
 
 pub enum Status {
     Failed = 1,
@@ -139,6 +146,62 @@ pub async fn delete_expired_jobs_from_local() -> Result<(), anyhow::Error> {
     let buffer = serde_json::to_vec(&jobs)?;
     job_writer(buffer).await?;
     Ok(())
+}
+
+pub async fn get_job_output(
+    builder: GetJobOutputFluentBuilder,
+    mut file: File,
+) -> Result<Status, anyhow::Error> {
+    match builder.send().await {
+        Ok(output) => {
+            let desc = String::from(output.archive_description().unwrap_or_else(|| "inventory"));
+            let mut buffer = output.body;
+            println!("{}: {}", Colorize::green("downloading"), desc);
+            while let Some(bytes) = buffer.try_next().await? {
+                file.write(&bytes)?;
+            }
+            println!("{}: {}", Colorize::green("writing complete"), desc);
+            Ok(Status::Done)
+        }
+        Err(reason) => {
+            println!("failed to get inventory output: {}", reason);
+            Ok(Status::Failed)
+        }
+    }
+}
+pub async fn describe_job_loop(
+    builder: DescribeJobFluentBuilder,
+) -> Result<DescribeJobOutput, anyhow::Error> {
+    loop {
+        match describe_job_output(&builder).await {
+            Ok((Status::Done, output)) => {
+                break Ok(output.unwrap());
+            }
+            Ok((Status::Pending, _)) => {
+                println!("job is not ready - going to sleep and will try again in an hour",);
+                thread::sleep(Duration::from_secs(SLEEP_DURATION))
+            }
+            _ => {
+                println!("describe_job failed");
+                break Err(anyhow!("describe error failed!"));
+            }
+        }
+    }
+}
+
+pub async fn describe_job_output(
+    builder: &DescribeJobFluentBuilder,
+) -> Result<(Status, Option<DescribeJobOutput>), anyhow::Error> {
+    match builder.clone().send().await {
+        Ok(output) => {
+            if output.completed() {
+                Ok((Status::Done, Some(output)))
+            } else {
+                Ok((Status::Pending, None))
+            }
+        }
+        Err(err) => Err(anyhow!(err)),
+    }
 }
 
 pub async fn get_jobs() -> Result<Vec<InitiatedJob>, anyhow::Error> {
