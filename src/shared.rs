@@ -333,75 +333,6 @@ pub fn confirm(title: String, confirmation_items: Vec<String>) -> Result<bool, a
     Ok(return_value.unwrap())
 }
 
-pub fn select_archive(mut events: Events<ArchiveItem>) -> Result<ArchiveItem, anyhow::Error> {
-    enable_raw_mode()?;
-    stdout().execute(EnterAlternateScreen)?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    let mut should_quit = false;
-    let mut return_value = None;
-    while !should_quit {
-        terminal.draw(|frame| {
-            let area = frame.size();
-            let list_items: Vec<&str> = events
-                .items
-                .iter()
-                .map(|x| x.archive_description.as_str())
-                .collect();
-
-            let block = Block::default()
-                .title("Archives")
-                .green()
-                .borders(Borders::ALL);
-
-            let list = List::new(list_items)
-                .bold()
-                .green()
-                .block(block)
-                .highlight_style(Style::new().italic())
-                .highlight_symbol("->")
-                .repeat_highlight_symbol(true);
-
-            frame.render_stateful_widget(list, area, &mut events.state)
-        })?;
-        if event::poll(time::Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
-                    should_quit = true;
-                }
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('j') {
-                    events.next();
-                }
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('k') {
-                    events.previous();
-                }
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Down {
-                    events.next();
-                }
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Up {
-                    events.previous();
-                }
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Esc {
-                    should_quit = true;
-                }
-                if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Enter {
-                    match events.choose() {
-                        Some(value) => {
-                            should_quit = true;
-                            return_value = Some(value);
-                        }
-                        None => {
-                            should_quit = true;
-                            println!("could not match user input")
-                        }
-                    }
-                }
-            }
-        }
-    }
-    release_terminal().expect("Issue releasing the temrinal");
-    Ok(return_value.unwrap())
-}
-
 pub fn select_multiple_archives(
     mut events: Events<ArchiveItem>,
 ) -> Result<Vec<ArchiveItem>, anyhow::Error> {
@@ -438,7 +369,7 @@ pub fn select_multiple_archives(
                 .collect();
 
             let block = Block::default()
-                .title("Archives")
+                .title("Archives | <Space> to select <Enter> to confirm selection")
                 .green()
                 .borders(Borders::ALL);
 
