@@ -169,6 +169,7 @@ pub async fn get_job_output(
         }
     }
 }
+
 pub async fn describe_job_loop(
     builder: DescribeJobFluentBuilder,
 ) -> Result<DescribeJobOutput, anyhow::Error> {
@@ -178,12 +179,15 @@ pub async fn describe_job_loop(
                 break Ok(output.unwrap());
             }
             Ok((Status::Pending, _)) => {
-                println!("job is not ready - going to sleep and will try again in an hour",);
+                println!(
+                    "job is not ready - going to sleep and will try again in {} ms",
+                    SLEEP_DURATION
+                );
                 thread::sleep(Duration::from_secs(SLEEP_DURATION))
             }
             _ => {
                 println!("describe_job failed");
-                break Err(anyhow!("describe error failed!"));
+                break Err(anyhow!("describe job failed!"));
             }
         }
     }
@@ -512,4 +516,33 @@ fn release_terminal() -> Result<(), anyhow::Error> {
         .execute(LeaveAlternateScreen)
         .expect("failed releasing terminal");
     Ok(())
+}
+
+pub struct InfiniteIndeces {
+    value: usize,
+}
+
+impl InfiniteIndeces {
+    pub fn new() -> Self {
+        InfiniteIndeces { value: 0 }
+    }
+    pub fn next(&mut self) -> usize {
+        self.value = self.value + 1;
+        self.value
+    }
+}
+#[test]
+fn test_infinite_indeces() {
+    let mut i = InfiniteIndeces::new();
+    assert_eq!(i.next(), 1);
+    assert_eq!(i.next(), 2);
+    assert_eq!(i.next(), 3);
+    assert_eq!(i.next(), 4);
+    assert_eq!(i.next(), 5);
+    assert_eq!(i.next(), 6);
+    assert_eq!(i.next(), 7);
+    assert_eq!(i.next(), 8);
+    assert_eq!(i.next(), 9);
+    assert_eq!(i.next(), 10);
+    assert_eq!(i.next(), 11);
 }

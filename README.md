@@ -132,10 +132,10 @@ Options:
 
 ## TODO
 
-- better sanitization for cache and TMP
-- better input handling when in tui
-- Add option to view inventory - really same as download screen - perhaps an alias?
-- Add option for just finishing pending jobs without creating new jobs
+- better sanitization and cleanup for cache and TMP
+- implement better signal interupt handling in tui mode
 - ensure output_as option works
+- ensure that uninitated app works
+- generate new help items with new options
 
 

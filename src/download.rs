@@ -84,9 +84,9 @@ pub async fn do_download(
     client: &Client,
     vault_name: &Option<String>,
     output_as: &Option<String>,
-    pending: bool,
+    pending: &bool,
 ) -> Result<(), anyhow::Error> {
-    if pending {
+    if *pending {
         match resolve_all_pending(client, crate::shared::JobType::Retrieval).await {
             Ok(Status::Done) => {
                 println!("Finished processing pending archive retrievals");

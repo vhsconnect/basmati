@@ -83,7 +83,7 @@ async fn main() -> Result<(), anyhow::Error> {
             output_as,
             pending,
         }) => {
-            download::do_download(&client, vault_name, output_as, *pending)
+            download::do_download(&client, vault_name, output_as, pending)
                 .await
                 .expect("Operation Failed");
             Ok(())
