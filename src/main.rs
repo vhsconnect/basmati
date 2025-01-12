@@ -54,7 +54,7 @@ struct Cli {
 
 #[::tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let config = aws_config::load_defaults(version::v2023_11_09()).await;
+    let config = aws_config::load_defaults(version::v2024_03_28()).await;
     let client = aws_sdk_glacier::Client::new(&config);
 
     match &Cli::parse().command {
