@@ -10,10 +10,12 @@ use clap::{Parser, Subcommand};
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a vault by supplying a name
     Create {
         #[arg(long, short)]
         vault_name: String,
     },
+    ///  Upload an archive at path to a particular vault with a particular description
     Upload {
         #[arg(long, short)]
         file_path: String,
@@ -22,27 +24,41 @@ enum Commands {
         #[arg(long, short)]
         description: String,
     },
+    ///  Get the inventory of a particular vault
     Inventory {
         #[arg(long, short)]
         vault_name: String,
     },
+    ///  Download a job
     Download {
         #[arg(long, short, required_unless_present = "pending")]
+        /// Required if not finishing pending jobs - you will be prompted to select an archive from
+        /// a list. List will be empty if you have not queried for inventory first
         vault_name: Option<String>,
         #[arg(long, short, default_value = None)]
+        /// Optional: Where to write out the archive to
         output_as: Option<String>,
+        /// Pass this option to finish a job you started earlier
         #[arg(long, short, exclusive = true)]
         pending: bool,
     },
+
+    ///  Delete a particular archive by selecting it from an archive.
     DeleteArchive {
         #[arg(long, short)]
         vault_name: String,
     },
+    /// List vaults
     ListVaults {},
 }
 
 #[derive(Parser)]
-#[command(author, version,  about, long_about = None)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = "Get inventory, upload/download/delete an archive and more"
+)]
 
 struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
