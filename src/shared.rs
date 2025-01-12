@@ -21,7 +21,7 @@ use std::io::{stdout, Write};
 use std::time;
 use std::{fs, thread};
 
-pub const FOURTY_EIGHT_HOURS: i64 = 172800;
+pub const TWENTY_FOUR_HOURS: i64 = 86400;
 const SLEEP_DURATION: u64 = 60 * 60;
 
 pub enum Status {
@@ -141,7 +141,7 @@ pub async fn delete_expired_jobs_from_local() -> Result<(), anyhow::Error> {
     let jobs = get_jobs().await?;
     let jobs: Vec<InitiatedJob> = jobs
         .into_iter()
-        .filter(|x| chrono::Utc::now().timestamp() - x.timestamp < FOURTY_EIGHT_HOURS)
+        .filter(|x| chrono::Utc::now().timestamp() - x.timestamp < TWENTY_FOUR_HOURS)
         .collect();
     let buffer = serde_json::to_vec(&jobs)?;
     job_writer(buffer).await?;
