@@ -180,8 +180,8 @@ pub async fn describe_job_loop(
             }
             Ok((Status::Pending, _)) => {
                 println!(
-                    "job is not ready - going to sleep and will try again in {} ms",
-                    SLEEP_DURATION
+                    "job is not ready - going to sleep and will try again in {} minutes",
+                    SLEEP_DURATION / 60
                 );
                 thread::sleep(Duration::from_secs(SLEEP_DURATION))
             }
