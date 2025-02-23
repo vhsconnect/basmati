@@ -12,7 +12,7 @@ async fn download_archive_by_id(
     client: &Client,
     vault_name: &String,
     archive_id: String,
-    output_as: String,
+    output_as: Option<String>,
 ) -> Result<(), anyhow::Error> {
     println!("download_archive_by_id gonna init, {}", archive_id);
 
@@ -49,7 +49,11 @@ async fn download_archive_by_id(
                     describe_output.job_id.as_mut().unwrap()
                 );
 
-                let file = fs::File::create(output_as).expect("failed to create user defined file");
+                let filename = match output_as {
+                    Some(value) => value,
+                    None => init_ouput.job_id().unwrap().to_owned(),
+                };
+                let file = fs::File::create(filename).expect("failed to create user defined file");
                 let builder = client
                     .get_job_output()
                     .account_id("-")
@@ -74,8 +78,8 @@ async fn download_archive_by_id(
             }
         }
         Err(reason) => {
-            println!("initation failed! - {}", reason);
-            Ok(())
+            println!("initation failed: check your that your AWS secrets are set");
+            Err(anyhow!(reason))
         }
     }
 }
@@ -111,16 +115,13 @@ pub async fn do_download(
                     "You must select a single archive and no more than one archive to download"
                 ));
             }
-            let output_as = output_as
-                .clone()
-                .expect("expected output_as path to be defined");
 
             let archive = archives.first().unwrap();
             match download_archive_by_id(
                 &client,
                 &vault_name,
                 archive.archive_id.clone(),
-                output_as,
+                output_as.clone().to_owned(),
             )
             .await
             {

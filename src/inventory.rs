@@ -132,7 +132,10 @@ pub async fn do_inventory(client: &Client, vault_name: &String) -> Result<(), an
             }
         }
         Err(reason) => {
-            eprintln!("{}", reason);
+            println!(
+                "initation failed: check your that your AWS secrets are set. {}",
+                reason
+            );
             Ok(())
         }
     }
