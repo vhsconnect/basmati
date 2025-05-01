@@ -1,7 +1,7 @@
 name: CI
 on: [push]
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -11,3 +11,50 @@ jobs:
           toolchain: stable
       - name: Run tests
         run: cargo test
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            extension: tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            extension: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            extension: zip
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            extension: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install musl target (Linux MUSL)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Install macOS targets
+        if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
