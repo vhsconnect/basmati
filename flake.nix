@@ -26,12 +26,15 @@
       ];
     in
     flake-utils.lib.eachSystem systems (
+
+      with builtins;
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         _builder = pkgs.callPackage inputs.naersk { };
         pname = "basmati";
-        version = "0.3.4";
+        cargoToml = readFile ./Cargo.toml;
+        version = fromTOML cargoToml.package.version;
         src = ./.;
         doCheck = true;
       in

@@ -1,4 +1,4 @@
-use crate::shared::{basmati_directory, clean_splits, create_if_not_exists};
+use crate::shared::{basmati_directory, clean_splits, create_if_not_exists, InfiniteIndeces};
 use anyhow::Result;
 use aws_sdk_glacier::{
     operation::initiate_multipart_upload::InitiateMultipartUploadOutput, Client,
@@ -14,35 +14,6 @@ use std::io::{Read, Write};
 use std::os::unix::fs::MetadataExt;
 const ONE_MB: usize = 1048576;
 const MAX_PART_AMOUNT: u64 = 10000;
-
-struct InfiniteIndeces {
-    value: usize,
-}
-
-impl InfiniteIndeces {
-    fn new() -> Self {
-        InfiniteIndeces { value: 0 }
-    }
-    fn next(&mut self) -> usize {
-        self.value = self.value + 1;
-        self.value
-    }
-}
-#[test]
-fn test_infinite_indeces() {
-    let mut i = InfiniteIndeces::new();
-    assert_eq!(i.next(), 1);
-    assert_eq!(i.next(), 2);
-    assert_eq!(i.next(), 3);
-    assert_eq!(i.next(), 4);
-    assert_eq!(i.next(), 5);
-    assert_eq!(i.next(), 6);
-    assert_eq!(i.next(), 7);
-    assert_eq!(i.next(), 8);
-    assert_eq!(i.next(), 9);
-    assert_eq!(i.next(), 10);
-    assert_eq!(i.next(), 11);
-}
 
 fn get_part_size(file: &File) -> Result<u64, anyhow::Error> {
     let sizes = [

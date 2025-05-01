@@ -1,4 +1,4 @@
-Basmati is a cli command like utility to stream archives up and down, to and from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to dowload your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfuly upload archives.
+Basmati is a cli command like utility to stream archives up and down, to and from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to download your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfully upload archives.
 
 ### Environment and setup
 
@@ -6,7 +6,7 @@ The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in you
 
 ### Packaging
 
-Basmati is currently available as a crate or as Nix flake
+Basmati is currently available as a crate or as Nix flake.
 
 ```
 # crate
@@ -60,10 +60,12 @@ Options:
 Create a new vault
 
 ```
+Create a vault by supplying a name
+
 Usage: basmati create --vault-name <VAULT_NAME>
 
 Options:
-  -v, --vault-name <VAULT_NAME>
+  -v, --vault-name <VAULT_NAME>  
   -h, --help                     Print help
 ```
 
@@ -72,13 +74,15 @@ Options:
 Upload an archive or file
 
 ```
+Upload an archive at path to a particular vault with a particular description
 
-Usage: basmati upload --file-path <FILE_PATH> --vault-name <VAULT_NAME>
+Usage: basmati upload --file-path <FILE_PATH> --vault-name <VAULT_NAME> --description <DESCRIPTION>
 
 Options:
-  -f, --file-path <FILE_PATH>
-  -v, --vault-name <VAULT_NAME>
-  -h, --help                     Print help
+  -f, --file-path <FILE_PATH>      
+  -v, --vault-name <VAULT_NAME>    
+  -d, --description <DESCRIPTION>  
+  -h, --help                       Print help
 ```
 
 #### download
@@ -86,12 +90,16 @@ Options:
 Download an archive by specifying a vault and path. You must have run `inventory` command first to download a ledger of your assets
 
 ```
-Usage: basmati download --vault-name <VAULT_NAME> --output-as <OUTPUT_AS>
+Download a job
+
+Usage: basmati download [OPTIONS]
 
 Options:
-  -v, --vault-name <VAULT_NAME>
-  -o, --output-as <OUTPUT_AS>
-  -h, --help
+  -v, --vault-name <VAULT_NAME>  Required if not finishing pending jobs - you will be prompted to select an archive from a list. List will be empty if you have not queried for inventory first
+  -o, --output-as <OUTPUT_AS>    Optional: Where to write out the archive to
+  -p, --pending                  Pass this option to finish a job you started earlier
+  -h, --help  
+
 ```
 
 #### inventory
@@ -99,11 +107,12 @@ Options:
 Download an invenory list for a specific vault
 
 ```
-Usage: basmati inventory --vault-name <VAULT_NAME> --desc <DESC>
+Get the inventory of a particular vault
+
+Usage: basmati inventory --vault-name <VAULT_NAME>
 
 Options:
-  -v, --vault-name <VAULT_NAME>
-  -d, --desc <DESC>
+  -v, --vault-name <VAULT_NAME>  
   -h, --help                     Print help
 ```
 
@@ -112,10 +121,12 @@ Options:
 Delete an archive from a vault
 
 ```
+Delete a particular archive by selecting it from an archive
+
 Usage: basmati delete-archive --vault-name <VAULT_NAME>
 
 Options:
-  -v, --vault-name <VAULT_NAME>
+  -v, --vault-name <VAULT_NAME>  
   -h, --help                     Print help
 ```
 
@@ -132,5 +143,8 @@ Options:
 
 ## TODO
 
-- better sanitization for cache and TMP
-- better input handling when in tui
+- better sanitization and cleanup for cache and TMP
+- implement better signal interupt handling in tui mode
+- provide binaries for major platforms
+
+
