@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    name: Build and Upload Binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            extension: tar.gz
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            extension: tar.gz
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            extension: zip
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            extension: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        run: |
+          BIN_NAME=basmati
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          BIN_NAME=basmati
+          TARGET_DIR=target/${{ matrix.target }}/release
+          OUTPUT_NAME=${BIN_NAME}-${{ matrix.target }}
+
+          if [[ "${{ matrix.extension }}" == "zip" ]]; then
+            7z a $OUTPUT_NAME.zip $TARGET_DIR/$BIN_NAME.exe
+          else
+            tar -czf $OUTPUT_NAME.tar.gz -C $TARGET_DIR $BIN_NAME
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            *.${{ matrix.extension }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
