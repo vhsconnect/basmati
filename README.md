@@ -1,4 +1,4 @@
-Basmati is a cli command like utility to stream archives up and down, to and from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to dowload your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfuly upload archives.
+Basmati is a cli command like utility to stream archives up and down, to and from AWS Glacier, AWS's cold storage offering. Cold storage means that when you want your files you have to send in a request to be fulfilled within 6 - 12 hours. The process is pretty tiresome as you need to download your archive within a certain time frame of having initiated the download job. Basmati makes it easy by showing your inventory in a TUI application, polling Glacier until the job is ready and completed and calculating all the annoying treehashes to successfully upload archives.
 
 ### Environment and setup
 
@@ -6,7 +6,7 @@ The tool assumes your `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are in you
 
 ### Packaging
 
-Basmati is currently available as a crate or as Nix flake
+Basmati is currently available as a crate or as Nix flake.
 
 ```
 # crate
@@ -145,8 +145,6 @@ Options:
 
 - better sanitization and cleanup for cache and TMP
 - implement better signal interupt handling in tui mode
-- ensure output_as option works
-- ensure that uninitated app works
-- generate new help items with new options
+- provide binaries for major platforms
 
 
