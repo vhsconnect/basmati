@@ -143,8 +143,6 @@ Options:
 
 ## TODO
 
-- better sanitization and cleanup for cache and TMP
 - implement better signal interupt handling in tui mode
-- provide binaries for major platforms
 
 

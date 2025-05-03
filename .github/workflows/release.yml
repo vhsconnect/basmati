@@ -1,9 +1,9 @@
-name: OPT
+name: Release
 
 on:
   push:
     branches:
-      - ci-test-2 
+      - master
 
 jobs:
   release:
@@ -24,7 +24,6 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - run: nix develop --impure -c bash -c "cargo build --release --target ${{ matrix.target }}"
-      - run: ls "target/${{ matrix.target }}/release"
       - run: tar czf "basmati-${{ matrix.target }}.tar.gz" target
       - run: |
           VERSION=$(grep '^version = ' Cargo.toml | cut -d '"' -f2)
@@ -32,7 +31,6 @@ jobs:
       - run: |
           echo "ASSET_PATH=basmati-${{ matrix.target }}.tar.gz" >> $GITHUB_ENV
           echo "ASSET_NAME=basmati-${{ matrix.target }}.tar.gz" >> $GITHUB_ENV
-      - run: ls -al
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -46,8 +44,8 @@ jobs:
           files: ${{ env.ASSET_PATH }}
           draft: false
           prerelease: false
-          tag_name: v0.3.5
-          name: Release v0.3.5
+          tag_name: v${{ env.RELEASE_VERSION }}
+          name: Release v${{ env.RELEASE_VERSION }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
