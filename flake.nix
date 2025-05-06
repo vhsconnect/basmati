@@ -34,7 +34,7 @@
         _builder = pkgs.callPackage inputs.naersk { };
         pname = "basmati";
         cargoToml = readFile ./Cargo.toml;
-        version = fromTOML cargoToml.package.version;
+        version = (fromTOML cargoToml).package.version;
         src = ./.;
         doCheck = true;
       in
